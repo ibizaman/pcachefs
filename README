@@ -1,3 +1,9 @@
+pCacheFS - http://code.google.com/p/pcachefs/downloads/list
+
+Copyright 2012 Jonny Tyers
+pCacheFS is license under Apache License 2.0 - see the LICENSE file for details.
+
+
 pCacheFS provides a simple caching layer for other filesystems. The cache, however, does not disappear when you start/stop pCacheFS or reboot - it is persistent.
 
 It is designed for caching large amounts of data on remote filesystems that don't change very much, such as movie/music libraries.
