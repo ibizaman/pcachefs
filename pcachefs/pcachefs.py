@@ -9,7 +9,7 @@
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+	   http://www.apache.org/licenses/LICENSE-2.0
 
    Unless required by applicable law or agreed to in writing, software
    distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,16 +27,31 @@ import time
 import sys
 import pickle
 import types
+import factory
 
+from datetime import datetime
 from ranges import (Ranges, Range)
 from optparse import OptionGroup
 
+import vfs
+
 fuse.fuse_python_api = (0, 2)
 
-DEBUG = False
+DEBUG = True
 def debug(*s):
 	if DEBUG:
 		print s
+
+# Error codes
+# source: /usr/lib/syslinux/com32/include/errno.h
+E_NO_SUCH_FILE = -errno.ENOENT
+E_NOT_PERMITTED = -errno.EPERM
+E_IO_ERROR = -errno.EIO
+E_PERM_DENIED = -errno.EACCES
+E_READ_ONLY = -errno.EROFS
+E_NOT_IMPL= -errno.ENOSYS
+E_INVALID_ARG = -errno.EINVAL
+
 
 class FuseStat(fuse.Stat):
 	"""
@@ -66,6 +81,12 @@ class FuseStat(fuse.Stat):
  Main FUSE class - this just delegates operations to a Cacher instance
 """
 class PersistentCacheFs(fuse.Fuse):
+	# All 'special' (virtual) files begin with this prefix
+	SPECIAL_FILE_PREFIX = '/.pcache'
+
+	# Name of the file containing the 'cache mode only' flag
+	CACHE_ONLY_MODE_PATH = '/.pcache.cache_only_mode'
+
 	def __init__(self, *args, **kw):
 		fuse.Fuse.__init__(self, *args, **kw)
 
@@ -91,26 +112,104 @@ class PersistentCacheFs(fuse.Fuse):
 		self.target_dir = options.target_dir
 
 		self.cacher = Cacher(self.cache_dir, UnderlyingFs(self.target_dir))
+		
+		# Initialise the VirtualFileFS, which contains 'virtual' files which
+		# can be used by user apps to read and change internal pcachefs state
+		self.vfs = vfs.VirtualFileFS('.pcachefs.')
+		self.vfs.add_file(
+			vfs.BooleanVirtualFile('cache_only', lambda: '0')
+		)
 
 		fuse.Fuse.main(self, args)
 
 	def getattr(self, path):
+		if self.vfs.contains(path):
+			return self.vfs.getattr(path)
+
 		return self.cacher.getattr(path)
 
 	def readdir(self, path, offset):
-		return self.cacher.readdir(path, offset)
+		if self.vfs.contains(path):
+			for f in self.vfs.readdir(path, offset):
+				yield f
+
+		for f in self.cacher.readdir(path, offset):
+			yield f
 
 	def open(self, path, flags):
+		if self.vfs.contains(path):
+			return self.vfs.open(path, flags)
+
 		# Only support for 'READ ONLY' flag
 		access_flags = os.O_RDONLY | os.O_WRONLY | os.O_RDWR
 		if flags & access_flags != os.O_RDONLY:
-			return -errno.EACCES
+			return E_PERM_DENIED
 		else:
 			return 0
 
 	def read(self, path, size, offset):
+		if self.vfs.contains(path):
+			return self.vfs.read(path, size, offset)
+
 		return self.cacher.read(path, size, offset)
 
+	def write(self, path, buf, offset):
+		if self.vfs.contains(path):
+			return self.vfs.write(path, buf, offset)
+
+		return E_NOT_IMPL
+
+	def flush(self, path):
+		if self.vfs.contains(path):
+			return self.vfs.flush(path)
+
+		return 0 # success
+
+	def release(self, path):
+		if self.vfs.contains(path):
+			return self.vfs.release(path)
+
+		return 0 # success
+
+#	def _getattr_special(self, path):
+#		return FuseStat(os.stat('/proc/version')) # FIXME stat of the FUSE mountpoint
+#
+#	def _read_special(self, path, size, offset):
+#		debug("_read_special", path, size, offset)
+#		content = None
+#
+#		if path == self.CACHE_ONLY_MODE_PATH:
+#			debug("_read_special com", path, size, offset)
+#			if self.cacher.cache_only_mode == True:
+#				debug(" return 1")
+#				return '111111111111111111111111111\n'[offset:offset+size]
+#			else:
+#				debug(" return 0")
+#				return '000000000000000000000000000\n'[offset:offset+size]
+#
+#		else:
+#			debug(" return NSF")
+#			return E_NO_SUCH_FILE
+#			
+#	def _write_special(self, path, buf, offset):
+#		content = buf.strip()
+#		debug("_write_special", path, buf, offset)
+#
+#		if path == self.CACHE_ONLY_MODE_PATH:
+#			if content == '0':
+#				self.cacher.cache_only_mode = False
+#				return len(buf) # wrote one byte
+#
+#			elif content == '1':
+#				self.cacher.cache_only_mode = True
+#				return len(buf) # wrote one byte
+#
+#			else:
+#				return self.E_INVAL
+#
+#		else:
+#			return E_NO_SUCH_FILE
+			
 """ Implementation of FUSE operations that fetches data from the underlying FS """
 class UnderlyingFs:
 	def __init__(self, real_path):
@@ -128,7 +227,8 @@ class UnderlyingFs:
 		return fuse.Direntry(os.path.basename(r))
 
 	def getattr(self, path):
-		return FuseStat(os.stat(self._get_real_path(path)))
+		print 'UFS GETATTR C_F_S'
+		return factory.create(FuseStat, os.stat(self._get_real_path(path)))
 
 	def readdir(self, path, offset):
 		real_path = self._get_real_path(path)
@@ -152,7 +252,8 @@ class UnderlyingFs:
 		debug('ufs.read', path, str(size), str(offset))
 		return result
 """
-# Represents a cache, which caches entire files and their content
+# Represents a cache, which caches entire files and their content. This class mimics
+ the interface of a python Fuse object.
 #
 # The cache is a standard filesystem directory.
 # 
@@ -169,6 +270,7 @@ class UnderlyingFs:
 # underlying filesystem without any caching.
 #"""
 class Cacher:
+
 	"""
 	# Initialise a new Cacher.
 	#
@@ -181,6 +283,10 @@ class Cacher:
 	def __init__(self, cachedir, underlying_fs):
 		self.cachedir = cachedir
 		self.underlying_fs = underlying_fs
+
+		# If this is set to True, the cacher will fail if any
+		# requests are made for data that does not exist in the cache
+		self.cache_only_mode = False
 
 		if not os.path.exists(self.cachedir):
 			self._mkdir(self.cachedir)
@@ -264,7 +370,7 @@ class Cacher:
 			f.seek(offset)
 			result = f.read(size)
 
-		debug('  returning result from cache')
+		debug('  returning result from cache', type(result), len(result))
 		return result
 
 	"""
@@ -312,6 +418,9 @@ class Cacher:
 				pickle.dump(result, stat_cache_file)
 
 		return result
+
+	def write(self, path, buf, offset):
+		return -errno.ENOSYS
 
 	"""
 	# For a given path, return the name of the directory used to cache data for that path
