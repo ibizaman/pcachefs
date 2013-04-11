@@ -1,5 +1,9 @@
-from pcachefs import debug
+from pcachefsutil import debug
+from pcachefsutil import (E_NO_SUCH_FILE, E_PERM_DENIED)
 import fuse
+import stat
+import time
+import os
 
 """
 Represents a file on VirtualFileFS. Virtual files have a name (which will 
@@ -114,6 +118,7 @@ class SimpleVirtualFile(VirtualFile):
 		self.callback_on_change = callback_on_change
 
 		self.content = None
+		debug('SVF init, name: ' + str(name) + ', cor: ' + str(callback_on_read) + ', coc: ' + str(callback_on_change))
 
 	def _get_content(self):
 		if self.content == None:
@@ -164,16 +169,47 @@ If the 'callback_on_true' and 'callback_on_false' properties are both None, then
 file is marked read-only and cannot be changed.
 """
 class BooleanVirtualFile(SimpleVirtualFile):
-	def __init__(self, name, callback_on_read, callback_on_true = None, callback_on_false = None):
-		SimpleVirtualFile.__init__(self, name, self._read)
+	def __init__(self, name, callback_on_read = None, callback_on_true = None, callback_on_false = None):
+		debug('BVF init, name: ' + str(name) + ', cor: ' + str(callback_on_read) + ', cot: ' + str(callback_on_true) + ', cof: ' + str(callback_on_false))
+		# "2" so as not to override superclass method
+		self.callback_on_read2 = callback_on_read
+
+		self.callback_on_true = callback_on_true
+		self.callback_on_false = callback_on_false
+
+		coc = self._change
+		if callback_on_true == None and callback_on_false == None:
+			coc = None
+		
+		SimpleVirtualFile.__init__(self, name, self._read, callback_on_change=coc)
 
 		self.value = False
 
 	def _read(self):
+		if self.callback_on_read2 != None:
+			self.callback_on_read2(self.value)
+
 		if self.value:
 			return '1'
 		else:
 			return '0'
+
+	def _change(self, value):
+		debug('booleanVirtualFile: ' + value)
+		if value == '0':
+			self.value = False
+		elif value.strip() == '':
+			self.value = False
+		else:
+			self.value = True
+
+		if self.value:
+			if self.callback_on_true != None:
+				self.callback_on_true()
+		else:
+			if self.callback_on_false != None:
+				self.callback_on_false()
+		
 
 # Provides a fuse interface to 'virtual' files. This class deliberately
 # mimics the FUSE interface, so you can delegate to it from a real FUSE
@@ -248,9 +284,9 @@ class VirtualFileFS(object):
 		result = fuse.Stat()
 
 		if virtual_file.is_read_only():
-			result.st_mode = stat.S_IFREG | 0644
-		else:
 			result.st_mode = stat.S_IFREG | 0444
+		else:
+			result.st_mode = stat.S_IFREG | 0644
 		
 		# Always 1 for now (seems to be safe for files and dirs)	
 		result.st_nlink = 1
@@ -304,7 +340,7 @@ class VirtualFileFS(object):
 			# Only support for 'READ ONLY' flag
 			access_flags = os.O_RDONLY | os.O_WRONLY | os.O_RDWR
 			if flags & access_flags != os.O_RDONLY:
-				return -errno.EACCES
+				return E_PERM_DENIED
 			else:
 				return 0
 

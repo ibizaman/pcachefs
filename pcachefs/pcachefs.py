@@ -19,7 +19,6 @@
 
 """
 
-import errno
 import fuse
 import stat
 import os
@@ -32,25 +31,14 @@ import factory
 from datetime import datetime
 from ranges import (Ranges, Range)
 from optparse import OptionGroup
+from pcachefsutil import *
+
+# We explicitly refer to __builtin__ here so it can be mocked
+#import __builtin__
 
 import vfs
 
 fuse.fuse_python_api = (0, 2)
-
-DEBUG = True
-def debug(*s):
-	if DEBUG:
-		print s
-
-# Error codes
-# source: /usr/lib/syslinux/com32/include/errno.h
-E_NO_SUCH_FILE = -errno.ENOENT
-E_NOT_PERMITTED = -errno.EPERM
-E_IO_ERROR = -errno.EIO
-E_PERM_DENIED = -errno.EACCES
-E_READ_ONLY = -errno.EROFS
-E_NOT_IMPL= -errno.ENOSYS
-E_INVALID_ARG = -errno.EINVAL
 
 
 class FuseStat(fuse.Stat):
@@ -117,7 +105,9 @@ class PersistentCacheFs(fuse.Fuse):
 		# can be used by user apps to read and change internal pcachefs state
 		self.vfs = vfs.VirtualFileFS('.pcachefs.')
 		self.vfs.add_file(
-			vfs.BooleanVirtualFile('cache_only', lambda: '0')
+			vfs.BooleanVirtualFile('cache_only', 
+				callback_on_true = self.cacher.cache_only_mode_enable,
+				callback_on_false = self.cacher.cache_only_mode_disable)
 		)
 
 		fuse.Fuse.main(self, args)
@@ -129,9 +119,8 @@ class PersistentCacheFs(fuse.Fuse):
 		return self.cacher.getattr(path)
 
 	def readdir(self, path, offset):
-		if self.vfs.contains(path):
-			for f in self.vfs.readdir(path, offset):
-				yield f
+		for f in self.vfs.readdir(path, offset):
+			yield f
 
 		for f in self.cacher.readdir(path, offset):
 			yield f
@@ -165,7 +154,8 @@ class PersistentCacheFs(fuse.Fuse):
 
 		return 0 # success
 
-	def release(self, path):
+	def release(self, path, what):
+		debug('release ' + str(path) + ', ' + str(what))
 		if self.vfs.contains(path):
 			return self.vfs.release(path)
 
@@ -245,7 +235,7 @@ class UnderlyingFs:
 	def read(self, path, size, offset):
 		real_path = self._get_real_path(path)
 
-		with open(real_path, 'rb') as f:
+		with __builtin__.open(real_path, 'rb') as f:
 			f.seek(offset)
 			result = f.read(size)
 
@@ -288,14 +278,26 @@ class Cacher:
 		# requests are made for data that does not exist in the cache
 		self.cache_only_mode = False
 
+		debug('cdir: ' + self.cachedir)
+		debug('os: ' + str(type(os)))
+		debug('pathexists: ' + str(os.path.exists(self.cachedir)))
+
 		if not os.path.exists(self.cachedir):
 			self._mkdir(self.cachedir)
 
+	def cache_only_mode_enable(self):
+		debug('cacher cache_only_mode enabled')
+		self.cache_only_mode = True
+
+	def cache_only_mode_disable(self):
+		debug('cacher cache_only_mode disabled')
+		self.cache_only_mode = False
+
 	"""
-	# Read the given data from the given path on the filesystem.
-	# 
-	# Any parts which are requested and are not in the cache are read
-	# from the underlying filesystem
+	Read the given data from the given path on the filesystem.
+	
+	Any parts which are requested and are not in the cache are read
+	from the underlying filesystem
 	"""
 	def read(self, path, size, offset):
 		debug('cacher.read', path, str(size), str(offset))
@@ -309,7 +311,7 @@ class Cacher:
 		# Ranges object indicating which chunks of the file we have cached
 		cached_blocks = None
 		if os.path.exists(data_cache_range):
-			with open(data_cache_range, 'rb') as f:
+			with __builtin__.open(data_cache_range, 'rb') as f:
 				debug('  loading cached_blocks from file')
 				cached_blocks = pickle.load(f)
 		else:
@@ -331,7 +333,7 @@ class Cacher:
 			file_stat = self.getattr(path)
 			self._create_cache_dir(path)
 
-			with open(cache_data, 'wb') as f:
+			with __builtin__.open(cache_data, 'wb') as f:
 				debug('  creating blank file, size', str(file_stat.st_size))
 				f.seek(file_stat.st_size - 1)
 				f.write('\0')
@@ -347,7 +349,7 @@ class Cacher:
 
 			# Now open it up in update mode so we can add data to it as
 			# we read the data from the underlying filesystem
-			with open(cache_data, 'r+b') as cache_data_file:
+			with __builtin__.open(cache_data, 'r+b') as cache_data_file:
 
 				# Now loop through all the blocks we need to get 
 				# and append them to the cached file as we go
@@ -360,13 +362,13 @@ class Cacher:
 					cache_data_file.write(block_data) # overwrites existing data in the file
 
 			# update our cached_blocks file
-			with open(data_cache_range, 'wb') as f:
+			with __builtin__.open(data_cache_range, 'wb') as f:
 				pickle.dump(cached_blocks, f)
 
 		# Now we have loaded all the data we need to into the cache, we do the read
 		# from the cached file
 		result = None
-		with open(cache_data, 'rb') as f:
+		with __builtin__.open(cache_data, 'rb') as f:
 			f.seek(offset)
 			result = f.read(size)
 
@@ -374,7 +376,7 @@ class Cacher:
 		return result
 
 	"""
-	# List the given directory, from the cache
+	List the given directory, from the cache
 	"""
 	def readdir(self, path, offset):
 		cache_dir = self._get_cache_dir(path, 'cache.list')
@@ -382,7 +384,7 @@ class Cacher:
 		result = None
 		if os.path.exists(cache_dir):
 			debug('cacher.readdir getting from cache', path)
-			with open(cache_dir, 'rb') as list_cache_file:
+			with __builtin__.open(cache_dir, 'rb') as list_cache_file:
 				result = pickle.load(list_cache_file)
 
 		else:
@@ -391,21 +393,21 @@ class Cacher:
 			result = list(result_generator)
 
 			self._create_cache_dir(path)
-			with open(cache_dir, 'wb') as list_cache_file:
+			with __builtin__.open(cache_dir, 'wb') as list_cache_file:
 				pickle.dump(result, list_cache_file)
 
 		# Return a new generator over our list of items
 		return (x for x in result)
 
 	"""
-	# Retrieve stat information for a particular file from the cache
+	Retrieve stat information for a particular file from the cache
 	"""
 	def getattr(self, path):
 		cache_dir = self._get_cache_dir(path, 'cache.stat')
 
 		result = None
 		if os.path.exists(cache_dir):
-			with open(cache_dir, 'rb') as stat_cache_file:
+			with __builtin__.open(cache_dir, 'rb') as stat_cache_file:
 				result = pickle.load(stat_cache_file)
 				debug('cacher.getattr', 'fetching from cache', path)
 
@@ -414,7 +416,7 @@ class Cacher:
 			debug('cacher.getattr getting from filesystem', path)
 
 			self._create_cache_dir(path)
-			with open(cache_dir, 'wb') as stat_cache_file:
+			with __builtin__.open(cache_dir, 'wb') as stat_cache_file:
 				pickle.dump(result, stat_cache_file)
 
 		return result
@@ -445,6 +447,7 @@ class Cacher:
 	# Create the given directory if it does not already exist
 	"""
 	def _mkdir(self, path):
+		debug('mkdir, os: ' + str(type(os)))
 		if not os.path.exists(path):
 			os.makedirs(path)
 
