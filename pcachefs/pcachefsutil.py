@@ -3,8 +3,8 @@ import errno
 
 DEBUG = True
 def debug(*s):
-	if DEBUG:
-		print s
+    if DEBUG:
+        print s
 
 # Error codes
 # source: /usr/lib/syslinux/com32/include/errno.h

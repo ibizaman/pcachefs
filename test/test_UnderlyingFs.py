@@ -6,117 +6,118 @@ from pcachefs import factory
 import os
 
 class UnderlyingFsTest(unittest.TestCase):
-	def test_init(self):
-		ufs = pcachefs.UnderlyingFs('/path/to')
+    def test_init(self):
+        ufs = pcachefs.UnderlyingFs('/path/to')
 
-		self.assertEqual('/path/to', ufs.real_path)
+        self.assertEqual('/path/to', ufs.real_path)
 
-	def test_getattr(self):
-		# Given
-		ufs = pcachefs.UnderlyingFs('/path/to')
-		stat = Mock()
-		os.stat = MagicMock(return_value=stat)
+    def test_getattr(self):
+        # Given
+        ufs = pcachefs.UnderlyingFs('/path/to')
+        stat = Mock()
+        os.stat = MagicMock(return_value=stat)
 
-		fuse_stat = Mock()
-		factory.create = MagicMock(return_value=fuse_stat)
+        fuse_stat = Mock()
+        factory.create = MagicMock(return_value=fuse_stat)
 
-		# When
-		result = ufs.getattr('/my_file')
+        # When
+        result = ufs.getattr('/my_file')
 
-		# Then
-		os.stat.assert_called_with('/path/to/my_file')
-		factory.create.assert_called_with(pcachefs.FuseStat, stat)
+        # Then
+        os.stat.assert_called_with('/path/to/my_file')
+        factory.create.assert_called_with(pcachefs.FuseStat, stat)
 
-		self.assertEqual(result, fuse_stat)
+        self.assertEqual(result, fuse_stat)
 
-	def test_readdirShouldReturnGenerator(self):
-		import types
+    def test_readdirShouldReturnGenerator(self):
+        import types
 
-		# Given
-		ufs = pcachefs.UnderlyingFs('/path/to')
-		
-		os.path.isdir = MagicMock(return_value=True)
+        # Given
+        ufs = pcachefs.UnderlyingFs('/path/to')
 
-		entries = [ 'file1', 'file2', 'file3' ]
-		os.listdir = MagicMock(return_value=entries)
+        os.path.isdir = MagicMock(return_value=True)
 
-		# When
-		result = ufs.readdir('/test_dir', None)
+        entries = [ 'file1', 'file2', 'file3' ]
+        os.listdir = MagicMock(return_value=entries)
 
-		# Then
-		os.path.isdir.assert_called_with('/path/to/test_dir')
+        # When
+        result = ufs.readdir('/test_dir', None)
 
-		self.assertEquals(type(result), types.GeneratorType)
-	
-	def test_readdirShouldReturnDirentriesFromFileSystem(self):
-		import fuse
+        # Then
+        os.path.isdir.assert_called_with('/path/to/test_dir')
 
-		# Given
-		ufs = pcachefs.UnderlyingFs('/path/to')
-		
-		os.path.isdir = MagicMock(return_value=True)
+        self.assertEquals(type(result), types.GeneratorType)
 
-		entries = [ 'file1', 'file2', 'file3' ]
-		os.listdir = MagicMock(return_value=entries)
+    def test_readdirShouldReturnDirentriesFromFileSystem(self):
+        import fuse
 
-		# When
-		result = ufs.readdir('/test_dir', None)
+        # Given
+        ufs = pcachefs.UnderlyingFs('/path/to')
 
-		# Then
-		os.path.isdir.assert_called_with('/path/to/test_dir')
+        os.path.isdir = MagicMock(return_value=True)
 
-		resultList = []
-		for r in result:
-			# extract 'path' attributes of the Direntry objects
-			# contained in result
-			resultList.append(r.name)
+        entries = [ 'file1', 'file2', 'file3' ]
+        os.listdir = MagicMock(return_value=entries)
 
-		for r in [ 'file1', 'file2', 'file3' ]:
-			self.assertIn(r, resultList)
+        # When
+        result = ufs.readdir('/test_dir', None)
 
-	def test_readdirShouldReturnParentAndCurDirDirentries(self):
-		import fuse
+        # Then
+        os.path.isdir.assert_called_with('/path/to/test_dir')
 
-		# Given
-		ufs = pcachefs.UnderlyingFs('/path/to')
-		
-		os.path.isdir = MagicMock(return_value=True)
+        resultList = []
+        for r in result:
+            # extract 'path' attributes of the Direntry objects
+            # contained in result
+            resultList.append(r.name)
 
-		entries = [ 'file1', 'file2', 'file3' ]
-		os.listdir = MagicMock(return_value=entries)
+        for r in [ 'file1', 'file2', 'file3' ]:
+            self.assertIn(r, resultList)
 
-		# When
-		result = ufs.readdir('/test_dir', None)
+    def test_readdirShouldReturnParentAndCurDirDirentries(self):
+        import fuse
 
-		# Then
-		os.path.isdir.assert_called_with('/path/to/test_dir')
+        # Given
+        ufs = pcachefs.UnderlyingFs('/path/to')
 
-		resultList = []
-		for r in result:
-			# extract 'path' attributes of the Direntry objects
-			# contained in result
-			resultList.append(r.name)
+        os.path.isdir = MagicMock(return_value=True)
 
-		for r in [ '.', '..' ]:
-			self.assertIn(r, resultList)
+        entries = [ 'file1', 'file2', 'file3' ]
+        os.listdir = MagicMock(return_value=entries)
 
-	def test_readShouldReadDataFromFilesystemFiles(self):
-		import __builtin__
+        # When
+        result = ufs.readdir('/test_dir', None)
 
-		# Given
-		ufs = pcachefs.UnderlyingFs('/path/to')
+        # Then
+        os.path.isdir.assert_called_with('/path/to/test_dir')
 
-		# create mock for 'open()' builtin
-		mock_open = MagicMock()
-		__builtin__.open = mock_open
+        resultList = []
+        for r in result:
+            # extract 'path' attributes of the Direntry objects
+            # contained in result
+            resultList.append(r.name)
 
-		mock_open.return_value = MagicMock(spec=file)
-		
-		# When
-		ufs.read('/my/file', 400, 3)
+        for r in [ '.', '..' ]:
+            self.assertIn(r, resultList)
 
-		# Then
-		mock_open.assert_called_with('/path/to/my/file', 'rb')
-		file_handle = mock_open.return_value.__enter__.return_value
-		file_handle.seek.assert_called_with(3)
-		file_handle.read.assert_called_with(400)
+    def test_readShouldReadDataFromFilesystemFiles(self):
+        import __builtin__
+
+        # Given
+        ufs = pcachefs.UnderlyingFs('/path/to')
+
+        # create mock for 'open()' builtin
+        mock_open = MagicMock()
+        __builtin__.open = mock_open
+
+        mock_open.return_value = MagicMock(spec=file)
+
+        # When
+        ufs.read('/my/file', 400, 3)
+
+        # Then
+        mock_open.assert_called_with('/path/to/my/file', 'rb')
+        file_handle = mock_open.return_value.__enter__.return_value
+        file_handle.seek.assert_called_with(3)
+        file_handle.read.assert_called_with(400)
+
