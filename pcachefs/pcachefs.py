@@ -31,7 +31,7 @@ import factory
 from datetime import datetime
 from ranges import (Ranges, Range)
 from optparse import OptionGroup
-from pcachefsutil import *
+from pcachefsutil import debug
 
 # We explicitly refer to __builtin__ here so it can be mocked
 #import __builtin__
@@ -93,7 +93,7 @@ class PersistentCacheFs(fuse.Fuse):
             if options.target_dir == None:
                 raise ValueError('Need to specify --target-dir')
         except Exception, e:
-            print e
+            debug('PersistentCacheFs Exception', e)
             sys.exit(1)
 
         self.cache_dir = options.cache_dir
@@ -217,7 +217,7 @@ class UnderlyingFs:
         return fuse.Direntry(os.path.basename(r))
 
     def getattr(self, path):
-        print 'UFS GETATTR C_F_S'
+        debug('UFS GETATTR C_F_S')
         return factory.create(FuseStat, os.stat(self._get_real_path(path)))
 
     def readdir(self, path, offset):
@@ -233,13 +233,13 @@ class UnderlyingFs:
         return (fuse.Direntry(r) for r in dirents)
 
     def read(self, path, size, offset):
+        debug('ufs.read', path, str(size), str(offset))
         real_path = self._get_real_path(path)
 
         with __builtin__.open(real_path, 'rb') as f:
             f.seek(offset)
             result = f.read(size)
 
-        debug('ufs.read', path, str(size), str(offset))
         return result
 """
 # Represents a cache, which caches entire files and their content. This class mimics
@@ -447,7 +447,7 @@ class Cacher:
     # Create the given directory if it does not already exist
     """
     def _mkdir(self, path):
-        debug('mkdir, os: ' + str(type(os)))
+        debug('mkdir "' + path + '", os: ' + str(type(os)))
         if not os.path.exists(path):
             os.makedirs(path)
 

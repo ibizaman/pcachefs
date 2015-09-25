@@ -1,5 +1,6 @@
+from pcachefsutil import debug
 
 def create(t, *args):
-    print 'create', str(t), str(args)
+    debug('create', str(t), str(args))
     return t(args)
 
