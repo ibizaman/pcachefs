@@ -2,3 +2,7 @@
 .*.swp
 *~
 build
+
+.cache/
+dist/
+*.egg-info/
