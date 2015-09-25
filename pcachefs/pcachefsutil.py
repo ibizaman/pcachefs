@@ -1,10 +1,11 @@
 # Utility methods used across pcachefs
 import errno
+import sys
 
 DEBUG = True
 def debug(*s):
     if DEBUG:
-        print s
+        sys.stderr.write('DEBUG: ' + ', '.join(s) + '\n')
 
 # Error codes
 # source: /usr/lib/syslinux/com32/include/errno.h
