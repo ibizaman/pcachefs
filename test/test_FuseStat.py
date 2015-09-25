@@ -1,7 +1,6 @@
-from mock import (Mock, MagicMock)
+from pcachefs import FuseStat
 
 def test_init():
-    from pcachefs import FuseStat
 
     st_mode = 0775
     st_nlink = 2

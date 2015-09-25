@@ -34,7 +34,7 @@ from optparse import OptionGroup
 from pcachefsutil import debug
 
 # We explicitly refer to __builtin__ here so it can be mocked
-#import __builtin__
+import __builtin__
 
 import vfs
 

@@ -1,68 +1,64 @@
-from mock import (Mock, MagicMock)
+from mockito import when, mock, verify, any
+from .utils import WithWrapper
 
-import pcachefs
-from pcachefs import factory
+from pcachefs import UnderlyingFs, FuseStat, factory
 import os
+import __builtin__
+
 
 def test_init():
-    ufs = pcachefs.UnderlyingFs('/path/to')
+    ufs = UnderlyingFs('/path/to')
 
     assert '/path/to' == ufs.real_path
 
+
 def test_getattr():
     # Given
-    ufs = pcachefs.UnderlyingFs('/path/to')
-    stat = Mock()
-    os.stat = MagicMock(return_value=stat)
+    ufs = UnderlyingFs('/path/to')
 
-    fuse_stat = Mock()
-    factory.create = MagicMock(return_value=fuse_stat)
+    stat = mock()
+    when(os).stat('/path/to/my_file').thenReturn(stat)
+
+    fuse_stat = mock()
+    when(factory).create(FuseStat, stat).thenReturn(fuse_stat)
 
     # When
     result = ufs.getattr('/my_file')
 
     # Then
-    os.stat.assert_called_with('/path/to/my_file')
-    factory.create.assert_called_with(pcachefs.FuseStat, stat)
-
     assert result == fuse_stat
 
+
 def test_readdirShouldReturnGenerator():
-    import types
-
     # Given
-    ufs = pcachefs.UnderlyingFs('/path/to')
+    ufs = UnderlyingFs('/path/to')
 
-    os.path.isdir = MagicMock(return_value=True)
+    when(os.path).isdir('/path/to/test_dir').thenReturn(True)
 
     entries = [ 'file1', 'file2', 'file3' ]
-    os.listdir = MagicMock(return_value=entries)
+    when(os).listdir('/path/to/test_dir').thenReturn(entries)
 
     # When
     result = ufs.readdir('/test_dir', None)
 
     # Then
-    os.path.isdir.assert_called_with('/path/to/test_dir')
-
+    import types
     assert type(result) == types.GeneratorType
 
+
 def test_readdirShouldReturnDirentriesFromFileSystem():
-    import fuse
-
     # Given
-    ufs = pcachefs.UnderlyingFs('/path/to')
+    ufs = UnderlyingFs('/path/to')
 
-    os.path.isdir = MagicMock(return_value=True)
+    when(os.path).isdir('/path/to/test_dir').thenReturn(True)
 
     entries = [ 'file1', 'file2', 'file3' ]
-    os.listdir = MagicMock(return_value=entries)
+    when(os).listdir('/path/to/test_dir').thenReturn(entries)
 
     # When
     result = ufs.readdir('/test_dir', None)
 
     # Then
-    os.path.isdir.assert_called_with('/path/to/test_dir')
-
     resultList = []
     for r in result:
         # extract 'path' attributes of the Direntry objects
@@ -72,23 +68,20 @@ def test_readdirShouldReturnDirentriesFromFileSystem():
     for r in [ 'file1', 'file2', 'file3' ]:
         assert r in resultList
 
+
 def test_readdirShouldReturnParentAndCurDirDirentries():
-    import fuse
-
     # Given
-    ufs = pcachefs.UnderlyingFs('/path/to')
+    ufs = UnderlyingFs('/path/to')
 
-    os.path.isdir = MagicMock(return_value=True)
+    when(os.path).isdir('/path/to/test_dir').thenReturn(True)
 
     entries = [ 'file1', 'file2', 'file3' ]
-    os.listdir = MagicMock(return_value=entries)
+    when(os).listdir('/path/to/test_dir').thenReturn(entries)
 
     # When
     result = ufs.readdir('/test_dir', None)
 
     # Then
-    os.path.isdir.assert_called_with('/path/to/test_dir')
-
     resultList = []
     for r in result:
         # extract 'path' attributes of the Direntry objects
@@ -96,26 +89,25 @@ def test_readdirShouldReturnParentAndCurDirDirentries():
         resultList.append(r.name)
 
     for r in [ '.', '..' ]:
-        assert r == resultList
+        assert r in resultList
+
 
 def test_readShouldReadDataFromFilesystemFiles():
-    import __builtin__
-
     # Given
-    ufs = pcachefs.UnderlyingFs('/path/to')
+    ufs = UnderlyingFs('/path/to')
 
-    # create mock for 'open()' builtin
-    mock_open = MagicMock()
-    __builtin__.open = mock_open
+    mockFile = mock()
+    when(mockFile).seek(3).thenReturn(True)
+    when(mockFile).read(400).thenReturn('x'*400)
 
-    mock_open.return_value = MagicMock(spec=file)
+    when(__builtin__).open('/path/to/my/file', 'rb').thenReturn(WithWrapper(mockFile))
 
     # When
-    ufs.read('/my/file', 400, 3)
+    result = ufs.read('/my/file', 400, 3)
 
     # Then
-    mock_open.assert_called_with('/path/to/my/file', 'rb')
-    file_handle = mock_open.return_value.__enter__.return_value
-    file_handle.seek.assert_called_with(3)
-    file_handle.read.assert_called_with(400)
+    verify(mockFile).seek(3)
+    verify(mockFile).read(400)
+
+    assert result == 'x'*400
 
