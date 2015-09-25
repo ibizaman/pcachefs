@@ -61,6 +61,9 @@ setup(name='pCacheFS',
     scripts=['scripts/pcachefs'],
     packages=['pcachefs'],
 
+    install_requires=['fuse-python'],
+    tests_require=['mockito', 'pytest'],
+
     cmdclass = { 'test': PyTest, 'clean': CleanCommand }
 )
 
