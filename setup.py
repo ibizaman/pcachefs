@@ -58,7 +58,9 @@ setup(name='pCacheFS',
     url='http://code.google.com/p/pcachefs',
     license='Apache 2.0',
 
-    scripts=['scripts/pcachefs'],
+    entry_points={
+        'console_scripts': 'pcachefs=pcachefs.pcachefs:main',
+    },
     packages=['pcachefs'],
 
     install_requires=['fuse-python'],
