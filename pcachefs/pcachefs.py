@@ -451,7 +451,7 @@ class Cacher:
         if not os.path.exists(path):
             os.makedirs(path)
 
-if __name__ == '__main__':
+def main():
     usage="""
     pCacheFS: A persistently caching filesystem.
     """ + fuse.Fuse.fusage
@@ -466,3 +466,5 @@ if __name__ == '__main__':
     server.parse(errex=1)
     server.main()
 
+if __name__ == '__main__':
+    main()
