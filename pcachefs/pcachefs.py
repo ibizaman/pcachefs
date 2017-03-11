@@ -21,6 +21,7 @@
 
 import os
 import pickle
+import signal
 import stat
 import sys
 import time
@@ -107,6 +108,7 @@ class PersistentCacheFs(fuse.Fuse):
                 callback_on_false = self.cacher.cache_only_mode_disable)
         )
 
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
         fuse.Fuse.main(self, args)
 
     def getattr(self, path):
