@@ -457,8 +457,9 @@ def main(args=None):
     #server.parser.set_conflict_handler('resolve') # enable overriding the --help message.
     #server.parser.add_option('-h', '--help', action='help', help="Display help")
 
-    server.parse(args, errex=1)
-    server.main()
+    parsed_args = server.parse(args, errex=1)
+    if not parsed_args.getmod('showhelp'):
+        server.main()
 
 if __name__ == '__main__':
     main()
