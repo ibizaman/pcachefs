@@ -70,3 +70,10 @@ Ubuntu users should be able to use this command to install:
 ```
 $ sudo apt-get install fuse python-fuse
 ```
+
+Then you can use pip and virtualenv to install dependencies.
+```
+$ virtualenv .venv2.7 -p python2.7
+$ source .venv2.7/bin/activate
+$ pip install -e '.[dev,test]'
+```
