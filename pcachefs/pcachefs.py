@@ -88,14 +88,10 @@ class PersistentCacheFs(fuse.Fuse):
     def main(self, args=None):
         options = self.cmdline[0]
 
-        try:
-            if options.cache_dir == None:
-                raise ValueError('Need to specify --cache-dir')
-            if options.target_dir == None:
-                raise ValueError('Need to specify --target-dir')
-        except Exception, e:
-            debug('PersistentCacheFs Exception', e)
-            sys.exit(1)
+        if options.cache_dir == None:
+            self.parser.error('Need to specify --cache-dir')
+        if options.target_dir == None:
+            self.parser.error('Need to specify --target-dir')
 
         self.cache_dir = options.cache_dir
         self.target_dir = options.target_dir
