@@ -6,5 +6,8 @@ build
 dist/
 *.egg-info/
 
+# test folder
+test/testroot
+
 # virtual env directory
 *.venv*

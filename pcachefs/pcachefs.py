@@ -453,7 +453,7 @@ class Cacher:
         if not os.path.exists(path):
             os.makedirs(path)
 
-def main():
+def main(args=None):
     usage="""
     pCacheFS: A persistently caching filesystem.
     """ + fuse.Fuse.fusage
@@ -465,7 +465,7 @@ def main():
     #server.parser.set_conflict_handler('resolve') # enable overriding the --help message.
     #server.parser.add_option('-h', '--help', action='help', help="Display help")
 
-    server.parse(errex=1)
+    server.parse(args, errex=1)
     server.main()
 
 if __name__ == '__main__':
