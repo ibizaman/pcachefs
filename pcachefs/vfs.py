@@ -96,7 +96,7 @@ class VirtualFile(object):
         return None
 
 """
-AVirtual File that allwos you to specify callback functions, called when the file is read
+A Virtual File that allows you to specify callback functions, called when the file is read
 or changed.
 
 This class is generally much simpler to use than using VirtualFile directly and hides much
