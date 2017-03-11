@@ -19,24 +19,25 @@
 
 """
 
-import fuse
-import stat
 import os
-import time
-import sys
 import pickle
+import stat
+import sys
+import time
 import types
-import factory
-
-from datetime import datetime
-from ranges import (Ranges, Range)
-from optparse import OptionGroup
-from pcachefsutil import debug
-
 # We explicitly refer to __builtin__ here so it can be mocked
 import __builtin__
 
+from datetime import datetime
+
+import factory
+import fuse
+from optparse import OptionGroup
+
 import vfs
+from ranges import (Ranges, Range)
+from pcachefsutil import debug
+
 
 fuse.fuse_python_api = (0, 2)
 
