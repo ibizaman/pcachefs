@@ -6,96 +6,6 @@ import time
 import os
 
 """
-Represents a file on VirtualFileFS. Virtual files have a name (which will
-be relative to the path used by the VirtualFileFS instance), a function
-called when the file is read and, optionally, a function called when
-the file is written.
-
-You should subclass this class to provide implementations of these
-functions.
-"""
-class VirtualFile(object):
-    def __init__(self, name):
-        self.name = name
-
-    """ Read content of this virtual file. """
-    def read(self, size, offset):
-        return ''
-
-    """
-    Write content of this virtual file.
-
-    If you override this function you MUST also override is_read_only()
-    to return True, or it will never be used!
-
-    Should return the number of bytes successfully written.
-    """
-    def write(self, buf, offset):
-        return None
-
-    """Truncate this virtual file.
-
-    If you override this function you MUST also override is_read_only()
-    to return True, or it will never be used!"""
-    def truncate(self, size):
-        return None
-
-    """Flush any outstanding data waiting to be written to this virtual file.
-
-    If you override this function you MUST also override is_read_only()
-    to return True, or it will never be used!"""
-    def flush(self):
-        return None
-
-    """Release handle to this file.
-
-    If you override this function you MUST also override is_read_only()
-    to return True, or it will never be used!"""
-    def release(self):
-        return None
-
-    """Determines if this file is writeable or not. Read-only files will
-    never have their write() functions called and their content cannot
-    be changed by any users of the filesystem (including root)."""
-    def is_read_only(self):
-        return False
-
-    """Returns the size of the file, for use in calls to getattr(). The
-    default implementation always returns zero.
-    You should override this to return an accurate value, otherwise apps
-    will assume the file is empty."""
-    def size(self):
-        return 0
-
-    """Returns the access time of the file, for use in calls to getattr().
-
-    The default implementation returns the current system time."""
-    def atime(self):
-        return time.mktime(time.gmtime())
-
-    """Returns the modification time of the file, for use in calls to getattr().
-
-    The default implementation returns the current system time."""
-    def mtime(self):
-        return time.mktime(time.gmtime())
-
-    """Returns the creation time of the file, for use in calls to getattr().
-
-    The default implementation returns the current system time."""
-    def ctime(self):
-        return time.mktime(time.gmtime())
-
-    """Returns the UID that owns the file. The default implementation returns
-    None, in which case the VirtualFileFS instance will use the UID of the
-    user currently accessing the file."""
-    def uid(self):
-        return None
-
-    """Same as uid() but for group ID."""
-    def gid(self):
-        return None
-
-"""
 A Virtual File that allows you to specify callback functions, called when the file is read
 or changed.
 
@@ -109,10 +19,10 @@ return a large amount of data (e.g. hundreds of MB) from 'callback_on_read' in w
 you may see performance hits or run out of memory. To get around this subclass VirtualFile
 instead of using SimpleVirtualFile.
 """
-class SimpleVirtualFile(VirtualFile):
+class SimpleVirtualFile:
 
     def __init__(self, name, callback_on_read, callback_on_change = None):
-        VirtualFile.__init__(self, name)
+        self.name = name
 
         self.callback_on_read = callback_on_read
         self.callback_on_change = callback_on_change
@@ -130,14 +40,39 @@ class SimpleVirtualFile(VirtualFile):
 
         return ''.join(self.content)
 
-    """Returns true if no write_function is specified"""
     def is_read_only(self):
+        """Determines if this file is writeable or not.
+
+        Read-only files will never have their write() functions called
+        and their content cannot be changed by any users of the
+        filesystem (including root).
+
+        Returns true if no write_function is specified.
+        """
         return self.callback_on_change == None
 
+    def read(self, size, offset):
+        """Read content of this virtual file."""
+        return self._get_content()[offset:offset+size]
+
     def size(self):
+        """Returns the size of the file, for use in calls to getattr().
+
+        The default implementation always returns zero. You should
+        override this to return an accurate value, otherwise apps will
+        assume the file is empty.
+        """
         return len(self._get_content())
 
     def write(self, buf, offset):
+        """
+        Write content of this virtual file.
+
+        If you override this function you MUST also override is_read_only()
+        to return True, or it will never be used!
+
+        Should return the number of bytes successfully written.
+        """
         # Ensure self.content is populated
         self._get_content()
 
@@ -145,20 +80,77 @@ class SimpleVirtualFile(VirtualFile):
         return len(buf)
 
     def truncate(self, size):
+        """Truncate this virtual file.
+
+        If you override this function you MUST also override is_read_only()
+        to return True, or it will never be used!
+        """
         # truncate the string
         self.content = list(self._get_content()[:size])
 
         return 0 # success
 
     def release(self):
+        """Release handle to this file.
+
+        If you override this function you MUST also override is_read_only()
+        to return True, or it will never be used!
+        """
         # convert list to string and return it
         self.callback_on_change(self._get_content())
 
         # clear cache
         self.content = None
 
-    def read(self, size, offset):
-        return self._get_content()[offset:offset+size]
+    def flush(self):
+        """Flush any outstanding data waiting to be written to this virtual file.
+
+        If you override this function you MUST also override is_read_only()
+        to return True, or it will never be used!
+        """
+        return None
+
+    def atime(self):
+        """Returns the access time of the file.
+
+        For use in calls to getattr(). The default implementation
+        returns the current system time.
+        """
+        return time.mktime(time.gmtime())
+
+    def mtime(self):
+        """Returns the modification time of the file.
+
+        For use in calls to getattr(). The default implementation
+        returns the current system time.
+        """
+        return time.mktime(time.gmtime())
+
+    def ctime(self):
+        """Returns the creation time of the file.
+
+        For use in calls to getattr(). The default implementation
+        returns the current system time.
+        """
+        return time.mktime(time.gmtime())
+
+    def uid(self):
+        """Returns the UID that owns the file.
+
+        The default implementation returns None, in which case the
+        VirtualFileFS instance will use the UID of the user currently
+        accessing the file.
+        """
+        return None
+
+    def gid(self):
+        """Returns the GID that owns the file.
+
+        The default implementation returns None, in which case the
+        VirtualFileFS instance will use the GID of the user currently
+        accessing the file.
+        """
+        return None
 
 """
 A virtual file whose content is either '0' or '1'. You can specify function callbacks,
