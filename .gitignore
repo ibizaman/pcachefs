@@ -3,6 +3,8 @@
 *~
 build
 
-.cache/
 dist/
 *.egg-info/
+
+# virtual env directory
+*.venv*
