@@ -44,10 +44,10 @@ fuse.fuse_python_api = (0, 2)
 
 
 class FuseStat(fuse.Stat):
-    """
-    Convenient class for Stat objects.
-    Set up the stat object based on values from the given
-    stat object (which should come from os.stat()).
+    """Convenient class for Stat objects.
+
+    Set up the stat object based on values from the given stat object
+    (which should come from os.stat()).
     """
     def __init__(self, stat):
         fuse.Stat.__init__(self)
@@ -67,10 +67,11 @@ class FuseStat(fuse.Stat):
         #self.st_rdev = stat.st_rdev
         #self.st_blksize = stat.st_blksize
 
-"""
- Main FUSE class - this just delegates operations to a Cacher instance
-"""
 class PersistentCacheFs(fuse.Fuse):
+    """Main FUSE class
+
+    This just delegates operations to a Cacher instance.
+    """
     # All 'special' (virtual) files begin with this prefix
     SPECIAL_FILE_PREFIX = '/.pcache'
 
@@ -80,7 +81,8 @@ class PersistentCacheFs(fuse.Fuse):
     def __init__(self, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
 
-        # Currently we have to run in single-threaded mode to prevent the cache becoming corrupted
+        # Currently we have to run in single-threaded mode to prevent
+        # the cache becoming corrupted
         fuse_opts = self.parse(['-s'])
 
         self.parser.add_option('-c', '--cache-dir', dest='cache_dir', help="Specifies the directory where cached data should be stored. This will be created if it does not exist.")
@@ -99,8 +101,9 @@ class PersistentCacheFs(fuse.Fuse):
 
         self.cacher = Cacher(self.cache_dir, UnderlyingFs(self.target_dir))
 
-        # Initialise the VirtualFileFS, which contains 'virtual' files which
-        # can be used by user apps to read and change internal pcachefs state
+        # Initialise the VirtualFileFS, which contains 'virtual' files
+        # which can be used by user apps to read and change internal
+        # pcachefs state
         self.vfs = vfs.VirtualFileFS('.pcachefs.')
         self.vfs.add_file(
             vfs.BooleanVirtualFile('cache_only',
@@ -199,8 +202,8 @@ class PersistentCacheFs(fuse.Fuse):
 #        else:
 #            return E_NO_SUCH_FILE
 
-""" Implementation of FUSE operations that fetches data from the underlying FS """
 class UnderlyingFs:
+    """Implementation of FUSE operations that fetches data from the underlying FS."""
     def __init__(self, real_path):
         self.real_path = real_path
 
@@ -241,36 +244,36 @@ class UnderlyingFs:
             result = f.read(size)
 
         return result
-"""
-# Represents a cache, which caches entire files and their content. This class mimics
- the interface of a python Fuse object.
-#
-# The cache is a standard filesystem directory.
-#
-# Initially the implementation will copy *entire* files (incl metadata)
-# down into the cache when they are read.
-#
-# The cached files are stored as follows in the cache directory:
-#   /cache/dir/filename.ext/cache.data   # copy of file data
-#   /cache/dir/filename.ext/cache.stat  # pickle'd stat object (from os.stat())
-#   /cache/dir/cache.list # pickle'd directory listing (from os.listdir())
-#
-#
-# For writes to files in the cache, these are passed through to the
-# underlying filesystem without any caching.
-#"""
 class Cacher:
+    """
+    Represents a cache, which caches entire files and their content.
+    This class mimics the interface of a python Fuse object.
 
+    The cache is a standard filesystem directory.
+
+    Initially the implementation will copy *entire* files (incl
+    metadata) down into the cache when they are read.
+
+    The cached files are stored as follows in the cache directory:
+      /cache/dir/filename.ext/cache.data   # copy of file data
+      /cache/dir/filename.ext/cache.stat  # pickle'd stat object (from os.stat())
+      /cache/dir/cache.list # pickle'd directory listing (from os.listdir())
+
+    For writes to files in the cache, these are passed through to the
+    underlying filesystem without any caching.
     """
-    # Initialise a new Cacher.
-    #
-    # cachedir the directory in which to store cached files and metadata (this will
-    #   created automatically if it does not exist)
-    # underlying_fs an object supporting the read(), readdir() and getattr() FUSE
-    #   operations. For any files/dirs not in the cache, this object's methods will
-    #   be called to retrieve the real data and populate the cache.
-    """
+
     def __init__(self, cachedir, underlying_fs):
+        """
+        Initialise a new Cacher.
+
+        cachedir the directory in which to store cached files and
+        metadata (this will created automatically if it does not exist)
+        underlying_fs an object supporting the read(), readdir() and
+        getattr() FUSE operations. For any files/dirs not in the cache,
+        this object's methods will be called to retrieve the real data
+        and populate the cache.
+        """
         self.cachedir = cachedir
         self.underlying_fs = underlying_fs
 
@@ -293,13 +296,12 @@ class Cacher:
         debug('Cacher cache_only_mode disabled')
         self.cache_only_mode = False
 
-    """
-    Read the given data from the given path on the filesystem.
-
-    Any parts which are requested and are not in the cache are read
-    from the underlying filesystem
-    """
     def read(self, path, size, offset):
+        """Read the given data from the given path on the filesystem.
+
+        Any parts which are requested and are not in the cache are read
+        from the underlying filesystem
+        """
         debug('Cacher.read({}, {}, {})'.format(path, size, offset))
         cache_data = self._get_cache_dir(path, 'cache.data')
         data_cache_range = self._get_cache_dir(path, 'cache.data.range')
@@ -375,10 +377,8 @@ class Cacher:
         debug('Cacher  returning result from cache', type(result), len(result))
         return result
 
-    """
-    List the given directory, from the cache
-    """
     def readdir(self, path, offset):
+        """List the given directory, from the cache."""
         debug('Cacher.readdir({}, {})'.format(path, offset))
         cache_dir = self._get_cache_dir(path, 'cache.list')
 
@@ -400,10 +400,8 @@ class Cacher:
         # Return a new generator over our list of items
         return (x for x in result)
 
-    """
-    Retrieve stat information for a particular file from the cache
-    """
     def getattr(self, path):
+        """Retrieve stat information for a particular file from the cache."""
         debug('Cacher.getattr({})'.format(path))
         cache_dir = self._get_cache_dir(path, 'cache.stat')
 
@@ -426,10 +424,8 @@ class Cacher:
     def write(self, path, buf, offset):
         return -errno.ENOSYS
 
-    """
-    # For a given path, return the name of the directory used to cache data for that path
-    """
     def _get_cache_dir(self, path, file = None):
+        """For a given path, return the name of the directory used to cache data for that path."""
         if path[0] != '/':
             raise ValueError("Expected leading slash")
 
@@ -438,17 +434,13 @@ class Cacher:
         else:
             return os.path.join(self.cachedir, path[1:], file)
 
-    """
-    # Create the cache path for the given directory if it does not already exist
-    """
     def _create_cache_dir(self, path):
+        """Create the cache path for the given directory if it does not already exist."""
         cache_dir = self._get_cache_dir(path)
         self._mkdir(cache_dir)
 
-    """
-    # Create the given directory if it does not already exist
-    """
     def _mkdir(self, path):
+        """Create the given directory if it does not already exist."""
         debug('mkdir "' + path + '", os: ' + str(type(os)))
         if not os.path.exists(path):
             os.makedirs(path)

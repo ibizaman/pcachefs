@@ -1,26 +1,30 @@
-from pcachefsutil import debug
-from pcachefsutil import (E_NO_SUCH_FILE, E_PERM_DENIED)
-import fuse
+import os
 import stat
 import time
-import os
 
-"""
-A Virtual File that allows you to specify callback functions, called when the file is read
-or changed.
+import fuse
 
-This class is generally much simpler to use than using VirtualFile directly and hides much
-of the implementation detail of FUSE.
+from pcachefsutil import debug
+from pcachefsutil import (E_NO_SUCH_FILE, E_PERM_DENIED)
 
-Note that in order to track changes properly this class will cache the content returned by
-'callback_on_read' when a file is opened. This cache is discarded when the file is closed
-(via the FUSE release() function). This won't be a problem for you unless you intend to
-return a large amount of data (e.g. hundreds of MB) from 'callback_on_read' in which case
-you may see performance hits or run out of memory. To get around this subclass VirtualFile
-instead of using SimpleVirtualFile.
-"""
+
 class SimpleVirtualFile:
+    """
+    A Virtual File that allows you to specify callback functions, called
+    when the file is read or changed.
 
+    This class is generally much simpler to use than using VirtualFile
+    directly and hides much of the implementation detail of FUSE.
+
+    Note that in order to track changes properly this class will cache
+    the content returned by 'callback_on_read' when a file is opened.
+    This cache is discarded when the file is closed (via the FUSE
+    release() function). This won't be a problem for you unless you
+    intend to return a large amount of data (e.g. hundreds of MB) from
+    'callback_on_read' in which case you may see performance hits or run
+    out of memory. To get around this subclass VirtualFile instead of
+    using SimpleVirtualFile.
+    """
     def __init__(self, name, callback_on_read, callback_on_change = None):
         self.name = name
 
@@ -152,15 +156,15 @@ class SimpleVirtualFile:
         """
         return None
 
-"""
-A virtual file whose content is either '0' or '1'. You can specify function callbacks,
-which will be called when the file's content is changed and which are used to read the
-current value.
-
-If the 'callback_on_true' and 'callback_on_false' properties are both None, then this
-file is marked read-only and cannot be changed.
-"""
 class BooleanVirtualFile(SimpleVirtualFile):
+    """
+    A virtual file whose content is either '0' or '1'. You can specify
+    function callbacks, which will be called when the file's content is
+    changed and which are used to read the current value.
+
+    If the 'callback_on_true' and 'callback_on_false' properties are
+    both None, then this file is marked read-only and cannot be changed.
+    """
     def __init__(self, name, callback_on_read = None, callback_on_true = None, callback_on_false = None):
         debug('BVF init, name: ' + str(name) + ', cor: ' + str(callback_on_read) + ', cot: ' + str(callback_on_true) + ', cof: ' + str(callback_on_false))
         # "2" so as not to override superclass method
@@ -203,18 +207,23 @@ class BooleanVirtualFile(SimpleVirtualFile):
                 self.callback_on_false()
 
 
-# Provides a fuse interface to 'virtual' files. This class deliberately
-# mimics the FUSE interface, so you can delegate to it from a real FUSE
-# filesystem, or use it in some other context.
-#
-# Virtual files are represented by instances of VirtualFile stored in a dict.
-# Virtual files can be made read-only or writeable.
 class VirtualFileFS(object):
-    # Initialise a new VirtualFileFS.
-    # prefix the prefix that the names of all virtual files will have (virtual files always reside in the root directory, /)
-    # files an optional list of VirtualFile instances to initalise with
-    def __init__(self, prefix, files = []):
+    """Provides a fuse interface to 'virtual' files.
 
+    This class deliberately mimics the FUSE interface, so you can
+    delegate to it from a real FUSE filesystem, or use it in some other
+    context.
+
+    Virtual files are represented by instances of VirtualFile stored in
+    a dict. Virtual files can be made read-only or writeable.
+    """
+    def __init__(self, prefix, files = []):
+        """Initialise a new VirtualFileFS.
+
+        Prefix the prefix that the names of all virtual files will have
+        (virtual files always reside in the root directory, /) files an
+        optional list of VirtualFile instances to initalise with.
+        """
         # ensure prefix always starts with '/'
         if prefix.startswith('/'):
             self.prefix = prefix
@@ -225,13 +234,16 @@ class VirtualFileFS(object):
         for f in files:
             self.files[f.name] = f
 
-    # Add a new VirtualFile to this VirtualFileFS. Any VirtualFile with the
-    # same name will be automatically removed before virtual_file is added.
     def add_file(self, virtual_file):
+        """Add a new VirtualFile to this VirtualFileFS.
+
+        Any VirtualFile with the same name will be automatically removed
+        before virtual_file is added.
+        """
         self.files[virtual_file.name] = virtual_file
 
-    # Remove the virtual file with the given path (or name).
     def remove_file(self, path):
+        """Remove the virtual file with the given path (or name)."""
         for n in [ path, self._get_filename(path) ]:
             if self.files.contains(n):
                 del self.files[n]
@@ -239,24 +251,28 @@ class VirtualFileFS(object):
 
         raise ValueError('path not found: ' + str(path))
 
-    """Returns true if the given path begins with the prefix this VirtualFileFS was created with. (Whether the virtual path exists or not is ignored.)"""
     def is_virtual(self, path):
+        """Returns true if the given path begins with the prefix this
+        VirtualFileFS was created with.
+
+        Whether the virtual path exists or not is ignored.
+        """
         return path.startswith(self.prefix)
 
-    """Returns true if the given path exists as a virtual file."""
     def contains(self, path):
+        """Returns true if the given path exists as a virtual file."""
         return self.get_file(path) != None
 
-    # Extract the name of a VirtualFile from the given path
     def _get_filename(self, path):
-        # self.prefix contains full prefix, including root path element '/'
+        """Extract the name of a VirtualFile from the given path."""
         debug('get_filename', self.prefix, path)
+        # self.prefix contains full prefix, including root path element '/'
         if path.startswith(self.prefix):
             return path[len(self.prefix):]
         return None
 
-    # Get the VirtualFile present at path, if there is any
-    def    get_file(self, path):
+    def get_file(self, path):
+        """Get the VirtualFile present at path, if there is any."""
         name = self._get_filename(path)
         debug('get_file', path, name)
         if name != None and name in self.files:
@@ -264,8 +280,8 @@ class VirtualFileFS(object):
 
         return None
 
-    # Retrieve attributes of a path in the VirtualFS
     def getattr(self, path):
+        """Retrieve attributes of a path in the VirtualFS."""
         debug('vfs getattr', path)
         virtual_file = self.get_file(path)
         debug('vfs getattr', virtual_file)

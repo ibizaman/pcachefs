@@ -19,10 +19,8 @@
 
 """
 
-"""
-# Represents a range of integers (i.e. a start and an end)
-"""
 class Range(object):
+    """Represents a range of integers (i.e. a start and an end)."""
     def __init__(self, start, end):
         if start >= end:
             raise ValueError('start (' + str(start) + ') must be smaller than end (' + str(end) + ')')
@@ -52,44 +50,44 @@ class Range(object):
 
         return i >= self.start and i <= self.end
 
-"""
-# A group of ranges.
-#
-# This class is a list with special awareness of Range objects. It will
-# re-jig its contents as new Ranges are added to ensure that Ranges never
-# overlap and are in order.
-#
-# For example:
-#   ranges = Ranges()
-#
-#   ranges.add_range(Range(0, 3))
-#   # ranges now just contains (0, 3)
-#
-#   ranges.add_range(Range(6, 10))
-#   # ranges = (0,3) (6,10)
-#
-#   ranges.add_range(Range(7, 15))
-#   # ranges = (0,3) (6,15)
-#    # (6,10) and (7,15) overlap so they have been merged and the
-#   # resulting range that is covered by both is added instead
-#
-#   ranges.add_range(Range(3, 5))
-#   # ranges = (0,5) (6,15)
-#   # (0,3) and (3,5) overlap, so they are merged
-#
-#   ranges.add_range(Range(5, 6))
-#   # ranges = (0,15)
-#   # (5,6) overlaps with both (0,5) and (6,15) so it is merged with both
-#
-#   ranges.add_range(Range(15, 16))
-#   # ranges = (0,16)
-#
-#   ranges.add_range(Range(1, 3))
-#   # ranges = (0,16)
-#   # (1,3) is already included in our range so it is effectively ignored
-#
-"""
 class Ranges(object):
+    """A group of ranges.
+
+    This class is a list with special awareness of Range objects. It
+    will re-jig its contents as new Ranges are added to ensure that
+    Ranges never overlap and are in order.
+
+    For example:
+      ranges = Ranges()
+
+      ranges.add_range(Range(0, 3))
+      # ranges now just contains (0, 3)
+
+      ranges.add_range(Range(6, 10))
+      # ranges = (0,3) (6,10)
+
+      ranges.add_range(Range(7, 15))
+      # ranges = (0,3) (6,15)
+      # (6,10) and (7,15) overlap so they have been merged and the
+      # resulting range that is covered by both is added instead
+
+      ranges.add_range(Range(3, 5))
+      # ranges = (0,5) (6,15)
+      # (0,3) and (3,5) overlap, so they are merged
+
+      ranges.add_range(Range(5, 6))
+      # ranges = (0,15)
+      # (5,6) overlaps with both (0,5) and (6,15) so it is merged with
+      # both
+
+      ranges.add_range(Range(15, 16))
+      # ranges = (0,16)
+
+      ranges.add_range(Range(1, 3))
+      # ranges = (0,16)
+      # (1,3) is already included in our range so it is effectively
+      # ignored
+    """
     def __init__(self):
         self.ranges = []
 
@@ -133,46 +131,45 @@ class Ranges(object):
         self.ranges.append(range)
         self._cleanup()
 
-    """
-    # Determines if i is contained within this list of ranges.
-    #
-    # if i is a number, then this will return True if it falls within
-    # one of the Range objects within this Ranges object.
-    #
-    # If i is a Range object, this will return True if it falls *entirely*
-    # with one of the Range objects within this Ranges object (i.e. its start
-    # and end are completely 'inside' or equal to a Range in this Ranges).
-    #
-    """
     def contains(self, i):
+        """Determines if i is contained within this list of ranges.
+
+        if i is a number, then this will return True if it falls within
+        one of the Range objects within this Ranges object.
+
+        If i is a Range object, this will return True if it falls
+        *entirely* with one of the Range objects within this Ranges
+        object (i.e. its start and end are completely 'inside' or equal
+        to a Range in this Ranges).
+        """
         for r in self.ranges:
             if r.contains(i):
                 return True
 
         return False
 
-    """
-    # Determine which parts of range are not covered by ranges within this Ranges object.
-    #
-    # For example, if I have this Ranges:
-    #  (0,3) (5,10) (12,15)
-    #
-    # and I call:
-    #  get_uncovered_portions(Range(2, 13))
-    #
-    # I get back a new Ranges object:
-    #  (3,4) (10,12)
-    #
-    """
     def get_uncovered_portions(self, range):
+        """Determine which parts of range are not covered by ranges within this Ranges object.
+
+        For example, if I have this Ranges:
+         (0,3) (5,10) (12,15)
+
+        and I call:
+         get_uncovered_portions(Range(2, 13))
+
+        I get back a new Ranges object:
+         (3,4) (10,12)
+
+        """
         portions = []
 
-        # if we have no ranges added then none of the given range will be covered
+        # if we have no ranges added then none of the given range will
+        # be covered
         if len(self.ranges) == 0:
             return [ range ]
 
-        # if the search range doesn't overlap any items in this range this nothing
-        # in this range will cover any of the search range
+        # if the search range doesn't overlap any items in this range
+        # this nothing in this range will cover any of the search range
         if range.end <= self.start or range.start >= self.end:
             return [ range ]
 
@@ -186,55 +183,64 @@ class Ranges(object):
                 break
 
             elif not item.contains(search_range.start):
-                # if search_range.start doesn't fall within this item, either
-                # search_range begins before item.start, or after item.end
+                # if search_range.start doesn't fall within this item,
+                # either search_range begins before item.start, or after
+                # item.end
 
                 if search_range.start < item.start:
 
                     if search_range.end < item.start:
-                        # if search_range ends before this item (ie never overlaps)
-                        # then add a portion representing the entire search_range and
-                        # exit the loop, since we've now gone as far as the end of the
-                        # search_range
+                        # if search_range ends before this item (ie
+                        # never overlaps) then add a portion
+                        # representing the entire search_range and exit
+                        # the loop, since we've now gone as far as the
+                        # end of the search_range
                         portions.append(Range(search_range.start, search_range.end))
                         break
 
                     else:
-                        # if search_range begins before this item starts (and it overlaps
-                        # with this item), add a portion to account for the space between
-                        # search_range.start and item.start, move beginning of search_range
-                        # to item.start, and re-run loop without moving to the next item
+                        # if search_range begins before this item starts
+                        # (and it overlaps with this item), add
+                        # a portion to account for the space between
+                        # search_range.start and item.start, move
+                        # beginning of search_range to item.start, and
+                        # re-run loop without moving to the next item
 
                         portions.append(Range(search_range.start, item.start))
                         search_range = Range(item.start, search_range.end)
 
                 else:
-                    # if this item does not overlap search range at all, ignore this item
+                    # if this item does not overlap search range at all,
+                    # ignore this item
                     i += 1 # move to next item
 
             else:
                 # if overlaps, then move the search_range up to begin at
-                # the end of this item (since it is 'covered' up to the end of this
+                # the end of this item (since it is 'covered' up to the
+                # end of this
                 # item)
                 search_range = Range(item.end, search_range.end)
 
-                # get the next item (because of _cleanup, we know that there will be
-                # space between item and next_item)
+                # get the next item (because of _cleanup, we know that
+                # there will be space between item and next_item)
                 next_item = None
                 if i < len(self.ranges)-1:
                     next_item = self.ranges[i+1]
 
                 if next_item == None or search_range.end <= next_item.start:
-                    # if our search_range finishes before we get to the next item, then add a
-                    # portion for search_range, and exit (since we've finished)
+                    # if our search_range finishes before we get to the
+                    # next item, then add a portion for search_range,
+                    # and exit (since we've finished)
 
                     portions.append(Range(search_range.start, search_range.end))
                     break
 
                 else:
-                    # if our search_range strays into the next_item range, add a portion
-                    # to cover the space up to the beginning of the next item, then move
-                    # the beginning of search_range up to the next item and re-run loop
+                    # if our search_range strays into the next_item
+                    # range, add a portion to cover the space up to the
+                    # beginning of the next item, then move the
+                    # beginning of search_range up to the next item and
+                    # re-run loop
 
                     portions.append(Range(search_range.start, next_item.start))
                     search_range = Range(next_item.start, search_range.end)

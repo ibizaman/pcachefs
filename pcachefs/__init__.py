@@ -1,4 +1,6 @@
-# pcachefs package
+"""
+pcachefs package.
+"""
 
 from pcachefs import *
 

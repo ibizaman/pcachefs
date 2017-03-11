@@ -1,4 +1,6 @@
-# Utility methods used across pcachefs
+"""
+Utility methods used across pcachefs.
+"""
 import errno
 import sys
 
