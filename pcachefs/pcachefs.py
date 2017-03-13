@@ -30,6 +30,7 @@ import types
 import __builtin__
 
 from datetime import datetime
+from pprint import pformat
 
 import factory
 import fuse
@@ -64,8 +65,19 @@ class FuseStat(fuse.Stat):
         self.st_ino = stat.st_ino
         self.st_uid = stat.st_uid
 
-        #self.st_rdev = stat.st_rdev
-        #self.st_blksize = stat.st_blksize
+        self.st_rdev = stat.st_rdev
+        self.st_blksize = stat.st_blksize
+
+    def __repr__(self):
+        v = vars(self)
+        v['is_dir'] = stat.S_ISDIR(v['st_mode'])
+        v['is_char_dev'] = stat.S_ISCHR(v['st_mode'])
+        v['is_block_dev'] = stat.S_ISBLK(v['st_mode'])
+        v['is_file'] = stat.S_ISREG(v['st_mode'])
+        v['is_fifo'] = stat.S_ISFIFO(v['st_mode'])
+        v['is_symlk'] = stat.S_ISLNK(v['st_mode'])
+        v['is_sock'] = stat.S_ISSOCK(v['st_mode'])
+        return pformat(v)
 
 class PersistentCacheFs(fuse.Fuse):
     """Main FUSE class
