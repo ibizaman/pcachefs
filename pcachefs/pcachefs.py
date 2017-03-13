@@ -307,6 +307,24 @@ class Cacher:
         debug('Cacher.cache_only_mode_disable')
         self.cache_only_mode = False
 
+    def get_cached_blocks(self, path):
+        data_cache_range = self._get_cache_dir(path, 'cache.data.range')
+
+        cached_blocks = None
+        if os.path.exists(data_cache_range):
+            with __builtin__.open(data_cache_range, 'rb') as f:
+                cached_blocks = pickle.load(f)
+        else:
+            cached_blocks = Ranges()
+
+        return cached_blocks
+
+    def update_cached_blocks(self, path, cached_blocks):
+        data_cache_range = self._get_cache_dir(path, 'cache.data.range')
+
+        with __builtin__.open(data_cache_range, 'wb') as f:
+            pickle.dump(cached_blocks, f)
+
     def read(self, path, size, offset):
         """Read the given data from the given path on the filesystem.
 
@@ -315,24 +333,12 @@ class Cacher:
         """
         debug('Cacher.read', path, size, offset)
         cache_data = self._get_cache_dir(path, 'cache.data')
-        data_cache_range = self._get_cache_dir(path, 'cache.data.range')
 
         # list of Range objects indicating which chunks of the requested data
         # we have not yet cached and will need to get from the underlying fs
-        blocks_to_read = []
-
-        # Ranges object indicating which chunks of the file we have cached
-        cached_blocks = None
-        if os.path.exists(data_cache_range):
-            with __builtin__.open(data_cache_range, 'rb') as f:
-                cached_blocks = pickle.load(f)
-        else:
-            cached_blocks = Ranges()
-
         requested_range = Range(offset, offset+size)
-
+        cached_blocks = self.get_cached_blocks(path)
         blocks_to_read = cached_blocks.get_uncovered_portions(requested_range)
-
 
         # First, create the cache file if it does not exist already
         if not os.path.exists(cache_data):
@@ -367,9 +373,7 @@ class Cacher:
                     cache_data_file.seek(block.start)
                     cache_data_file.write(block_data) # overwrites existing data in the file
 
-            # update our cached_blocks file
-            with __builtin__.open(data_cache_range, 'wb') as f:
-                pickle.dump(cached_blocks, f)
+            self.update_cached_blocks(path, cached_blocks)
 
         # Now we have loaded all the data we need to into the cache, we do the read
         # from the cached file
