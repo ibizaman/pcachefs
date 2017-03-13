@@ -1,6 +1,7 @@
 import os
 import signal
 import shutil
+import stat
 import tempfile
 import time
 from multiprocessing import Process
@@ -48,50 +49,79 @@ def pcachefs(sourcedir, cachedir, mountdir):
     p.join()
 
 
-def write_to_file(dirname, basename, content):
-    with open(os.path.join(dirname, basename), 'w') as f:
+def write_to_file(dirname, path, content):
+    with open(os.path.join(dirname, *path), 'w') as f:
         f.write(content)
     # Needed to let pcachefs propagate changes
     time.sleep(.1)
 
 
-def read_from_file(dirname, basename):
+def read_from_file(dirname, path):
     try:
-        with open(os.path.join(dirname, basename), 'r') as f:
+        with open(os.path.join(dirname, *path), 'r') as f:
             return f.read()
     except IOError as e:
-        print('Could not open', os.path.join(dirname, basename), e)
+        print('Could not open', os.path.join(dirname, *path), e)
         return None
 
 
+class ListDir(object):
+    def __init__(self, files, dirs):
+        self.files = sorted(list(files))
+        self.dirs = sorted(list(dirs))
+
+    def __repr__(self):
+        return '<ListDir files: {}, dirs: {}>'.format(self.files, self.dirs)
+
+    def __eq__(self, other):
+        return self.dirs == other.dirs and self.files == other.files
+
+    def __contains__(self, what):
+        return what in self.files or what in self.dirs
+
+
+def list_dir(dirname, path=None):
+    files = set()
+    dirs = set()
+    root = os.path.join(dirname, *(path or []))
+    for object in os.listdir(root):
+        is_dir = stat.S_ISDIR(os.stat(os.path.join(root, object)).st_mode)
+        if is_dir:
+            dirs.add(object)
+        else:
+            files.add(object)
+
+    return ListDir(files, dirs)
+
+
 def test_create_file(pcachefs, sourcedir, mountdir):
-    assert 'a' not in os.listdir(sourcedir)
-    assert 'a' not in os.listdir(mountdir)
-    assert read_from_file(sourcedir, 'a') == None
-    assert read_from_file(mountdir, 'a') == None
+    assert 'a' not in list_dir(sourcedir)
+    assert 'a' not in list_dir(mountdir)
+    assert read_from_file(sourcedir, ['a']) == None
+    assert read_from_file(mountdir, ['a']) == None
 
-    write_to_file(sourcedir, 'a', '1')
-    assert 'a' in os.listdir(sourcedir)
-    assert 'a' in os.listdir(mountdir)
-    assert read_from_file(sourcedir, 'a') == '1'
-    assert read_from_file(mountdir, 'a') == '1'
+    write_to_file(sourcedir, ['a'], '1')
+    assert 'a' in list_dir(sourcedir)
+    assert 'a' in list_dir(mountdir)
+    assert read_from_file(sourcedir, ['a']) == '1'
+    assert read_from_file(mountdir, ['a']) == '1'
 
 
-def test_cache_not_updated(pcachefs, sourcedir, mountdir):
-    write_to_file(sourcedir, 'a', '1')
+def test_cached_file_not_updated(pcachefs, sourcedir, mountdir):
+    write_to_file(sourcedir, ['a'], '1')
     # load in cache
-    read_from_file(mountdir, 'a')
-    write_to_file(sourcedir, 'a', '2')
-    assert 'a' in os.listdir(sourcedir)
-    assert 'a' in os.listdir(mountdir)
-    assert read_from_file(sourcedir, 'a') == '2'
-    assert read_from_file(mountdir, 'a') == '1'
+    read_from_file(mountdir, ['a'])
+    write_to_file(sourcedir, ['a'], '2')
+    assert 'a' in list_dir(sourcedir)
+    assert 'a' in list_dir(mountdir)
+    assert read_from_file(sourcedir, ['a']) == '2'
+    assert read_from_file(mountdir, ['a']) == '1'
 
 
-def test_only_cached_at_read(pcachefs, sourcedir, mountdir):
-    write_to_file(sourcedir, 'a', '1')
-    write_to_file(sourcedir, 'a', '2')
-    assert 'a' in os.listdir(sourcedir)
-    assert 'a' in os.listdir(mountdir)
-    assert read_from_file(sourcedir, 'a') == '2'
-    assert read_from_file(mountdir, 'a') == '2'
+def test_only_cached_file_at_read(pcachefs, sourcedir, mountdir):
+    write_to_file(sourcedir, ['a'], '1')
+    write_to_file(sourcedir, ['a'], '2')
+    assert 'a' in list_dir(sourcedir)
+    assert 'a' in list_dir(mountdir)
+    assert read_from_file(sourcedir, ['a']) == '2'
+    assert read_from_file(mountdir, ['a']) == '2'
