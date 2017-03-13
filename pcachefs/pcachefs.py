@@ -84,12 +84,6 @@ class PersistentCacheFs(fuse.Fuse):
 
     This just delegates operations to a Cacher instance.
     """
-    # All 'special' (virtual) files begin with this prefix
-    SPECIAL_FILE_PREFIX = '/.pcache'
-
-    # Name of the file containing the 'cache mode only' flag
-    CACHE_ONLY_MODE_PATH = '/.pcache.cache_only_mode'
-
     def __init__(self, *args, **kw):
         fuse.Fuse.__init__(self, *args, **kw)
 
