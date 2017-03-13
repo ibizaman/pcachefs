@@ -448,6 +448,7 @@ class Cacher:
         if not os.path.exists(path):
             os.makedirs(path)
 
+
 def main(args=None):
     usage="""
     pCacheFS: A persistently caching filesystem.
@@ -456,9 +457,6 @@ def main(args=None):
     version = "%prog " + fuse.__version__
 
     server = PersistentCacheFs(version=version, usage=usage, dash_s_do='setsingle')
-
-    #server.parser.set_conflict_handler('resolve') # enable overriding the --help message.
-    #server.parser.add_option('-h', '--help', action='help', help="Display help")
 
     parsed_args = server.parse(args, errex=1)
     if not parsed_args.getmod('showhelp'):
