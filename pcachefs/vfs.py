@@ -32,7 +32,6 @@ class SimpleVirtualFile:
         self.callback_on_change = callback_on_change
 
         self.content = None
-        debug('SVF init, name: ' + str(name) + ', cor: ' + str(callback_on_read) + ', coc: ' + str(callback_on_change))
 
     def _get_content(self):
         if self.content == None:
@@ -156,6 +155,7 @@ class SimpleVirtualFile:
         """
         return None
 
+
 class BooleanVirtualFile(SimpleVirtualFile):
     """
     A virtual file whose content is either '0' or '1'. You can specify
@@ -166,7 +166,6 @@ class BooleanVirtualFile(SimpleVirtualFile):
     both None, then this file is marked read-only and cannot be changed.
     """
     def __init__(self, name, callback_on_read = None, callback_on_true = None, callback_on_false = None):
-        debug('BVF init, name: ' + str(name) + ', cor: ' + str(callback_on_read) + ', cot: ' + str(callback_on_true) + ', cof: ' + str(callback_on_false))
         # "2" so as not to override superclass method
         self.callback_on_read2 = callback_on_read
 
@@ -191,7 +190,6 @@ class BooleanVirtualFile(SimpleVirtualFile):
             return '0'
 
     def _change(self, value):
-        debug('booleanVirtualFile: ' + value)
         if value == '0':
             self.value = False
         elif value.strip() == '':
@@ -265,7 +263,6 @@ class VirtualFileFS(object):
 
     def _get_filename(self, path):
         """Extract the name of a VirtualFile from the given path."""
-        debug('get_filename', self.prefix, path)
         # self.prefix contains full prefix, including root path element '/'
         if path.startswith(self.prefix):
             return path[len(self.prefix):]
@@ -274,7 +271,7 @@ class VirtualFileFS(object):
     def get_file(self, path):
         """Get the VirtualFile present at path, if there is any."""
         name = self._get_filename(path)
-        debug('get_file', path, name)
+        debug('VirtualFileFS.get_file', path, name)
         if name != None and name in self.files:
             return self.files[name]
 
@@ -282,9 +279,8 @@ class VirtualFileFS(object):
 
     def getattr(self, path):
         """Retrieve attributes of a path in the VirtualFS."""
-        debug('vfs getattr', path)
+        debug('VirtualFileFS.getattr', path)
         virtual_file = self.get_file(path)
-        debug('vfs getattr', virtual_file)
 
         if virtual_file == None:
             return E_NO_SUCH_FILE
@@ -326,6 +322,7 @@ class VirtualFileFS(object):
         return result
 
     def readdir(self, path, offset):
+        debug('VirtualFileFS.readdir', path, offset)
         dirents = []
 
         # Only add files if we're in the root directory
@@ -335,10 +332,10 @@ class VirtualFileFS(object):
                 dirents.append(self.prefix[1:] + k)
 
         # return a generator over the entries in the directory
-        debug('vfs readdir', dirents)
         return (fuse.Direntry(r) for r in dirents)
 
     def open(self, path, flags):
+        debug('VirtualFileFS.open', path, flags)
         file = self.get_file(path)
 
         if file == None:
@@ -356,32 +353,37 @@ class VirtualFileFS(object):
             return 0 # Always succeed
 
     def read(self, path, size, offset):
+        debug('VirtualFileFS.read', path, size, offset)
         f = self.get_file(path)
-
-        debug('vfs read', path, str(size), str(offset))
         return f.read(size, offset)
 
     def mknod(self, path, mode, dev):
+        debug('VirtualFileFS.mknod', path, mode, dev)
         # Don't allow creation of new files
         return E_PERM_DENIED
 
     def unlink(self, path):
+        debug('VirtualFileFS.unlink', path)
         # Don't allow removal of files
         return E_PERM_DENIED
 
     def write(self, path, buf, offset):
+        debug('VirtualFileFS.write', path, buf, offset)
         f = self.get_file(path)
         return f.write(buf, offset)
 
     def truncate(self, path, size):
+        debug('VirtualFileFS.truncate', path, size)
         f = self.get_file(path)
         return f.truncate(size)
 
     def flush(self, path, fh=None):
+        debug('VirtualFileFS.flush', path)
         f = self.get_file(path)
         return f.flush()
 
     def release(self, path, fh=None):
+        debug('VirtualFileFS.release', path)
         f = self.get_file(path)
         return f.release()
 

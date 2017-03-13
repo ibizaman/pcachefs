@@ -7,7 +7,7 @@ import sys
 DEBUG = True
 def debug(*words):
     if DEBUG:
-        sys.stderr.write('DEBUG: %s\n' % ', '.join(str(word) for word in words))
+        sys.stderr.write('DEBUG: %s\n' % ' '.join(str(word) for word in words))
 
 # Error codes
 # source: /usr/lib/syslinux/com32/include/errno.h

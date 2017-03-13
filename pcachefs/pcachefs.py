@@ -115,12 +115,14 @@ class PersistentCacheFs(fuse.Fuse):
         fuse.Fuse.main(self, args)
 
     def getattr(self, path):
+        debug('PersistentCacheFs.getattr', path)
         if self.vfs.contains(path):
             return self.vfs.getattr(path)
 
         return self.cacher.getattr(path)
 
     def readdir(self, path, offset):
+        debug('PersistentCacheFs.readdir', path, offset)
         for f in self.vfs.readdir(path, offset):
             yield f
 
@@ -128,6 +130,7 @@ class PersistentCacheFs(fuse.Fuse):
             yield f
 
     def open(self, path, flags):
+        debug('PersistentCacheFs.open', path, flags)
         if self.vfs.contains(path):
             return self.vfs.open(path, flags)
 
@@ -139,25 +142,28 @@ class PersistentCacheFs(fuse.Fuse):
             return 0
 
     def read(self, path, size, offset):
+        debug('PersistentCacheFs.read', path, size, offset)
         if self.vfs.contains(path):
             return self.vfs.read(path, size, offset)
 
         return self.cacher.read(path, size, offset)
 
     def write(self, path, buf, offset):
+        debug('PersistentCacheFs.write', path, buf, offset)
         if self.vfs.contains(path):
             return self.vfs.write(path, buf, offset)
 
         return E_NOT_IMPL
 
     def flush(self, path):
+        debug('PersistentCacheFs.flush', path)
         if self.vfs.contains(path):
             return self.vfs.flush(path)
 
         return 0 # success
 
     def release(self, path, what):
-        debug('release ' + str(path) + ', ' + str(what))
+        debug('PersistentCacheFs.release', path, what)
         if self.vfs.contains(path):
             return self.vfs.release(path)
 
@@ -219,11 +225,11 @@ class UnderlyingFs:
         return fuse.Direntry(os.path.basename(r))
 
     def getattr(self, path):
-        debug('UnderlyingFs.getattr({})'.format(path))
+        debug('UnderlyingFs.getattr', path)
         return factory.create(FuseStat, os.stat(self._get_real_path(path)))
 
     def readdir(self, path, offset):
-        debug('UnderlyingFs.readdir({}, {})'.format(path, offset))
+        debug('UnderlyingFs.readdir', path, offset)
         real_path = self._get_real_path(path)
 
         dirents = []
@@ -236,7 +242,7 @@ class UnderlyingFs:
         return (fuse.Direntry(r) for r in dirents)
 
     def read(self, path, size, offset):
-        debug('UnderlyingFs.read({}, {}, {})'.format(path, size, offset))
+        debug('UnderlyingFs.read', path, size, offset)
         real_path = self._get_real_path(path)
 
         with __builtin__.open(real_path, 'rb') as f:
@@ -244,6 +250,8 @@ class UnderlyingFs:
             result = f.read(size)
 
         return result
+
+
 class Cacher:
     """
     Represents a cache, which caches entire files and their content.
@@ -281,19 +289,16 @@ class Cacher:
         # requests are made for data that does not exist in the cache
         self.cache_only_mode = False
 
-        debug('Cacher cdir: ' + self.cachedir)
-        debug('Cacher os: ' + str(type(os)))
-        debug('Cacher pathexists: ' + str(os.path.exists(self.cachedir)))
 
         if not os.path.exists(self.cachedir):
             self._mkdir(self.cachedir)
 
     def cache_only_mode_enable(self):
-        debug('Cacher cache_only_mode enabled')
+        debug('Cacher.cache_only_mode_enable')
         self.cache_only_mode = True
 
     def cache_only_mode_disable(self):
-        debug('Cacher cache_only_mode disabled')
+        debug('Cacher.cache_only_mode_disable')
         self.cache_only_mode = False
 
     def read(self, path, size, offset):
@@ -302,7 +307,7 @@ class Cacher:
         Any parts which are requested and are not in the cache are read
         from the underlying filesystem
         """
-        debug('Cacher.read({}, {}, {})'.format(path, size, offset))
+        debug('Cacher.read', path, size, offset)
         cache_data = self._get_cache_dir(path, 'cache.data')
         data_cache_range = self._get_cache_dir(path, 'cache.data.range')
 
@@ -314,20 +319,14 @@ class Cacher:
         cached_blocks = None
         if os.path.exists(data_cache_range):
             with __builtin__.open(data_cache_range, 'rb') as f:
-                debug('Cacher  loading cached_blocks from file')
                 cached_blocks = pickle.load(f)
         else:
             cached_blocks = Ranges()
 
         requested_range = Range(offset, offset+size)
 
-        debug('Cacher   read', 'path=' + path, 'size=' + str(size), 'offset=' + str(offset))
-        debug('Cacher   requested_range', requested_range)
-        debug('Cacher   cached_blocks', cached_blocks)
-
         blocks_to_read = cached_blocks.get_uncovered_portions(requested_range)
 
-        debug('Cacher   blocks_to_read', blocks_to_read)
 
         # First, create the cache file if it does not exist already
         if not os.path.exists(cache_data):
@@ -336,7 +335,6 @@ class Cacher:
             self._create_cache_dir(path)
 
             with __builtin__.open(cache_data, 'wb') as f:
-                debug('Cacher  creating blank file, size', str(file_stat.st_size))
                 f.seek(file_stat.st_size - 1)
                 f.write('\0')
 
@@ -374,22 +372,19 @@ class Cacher:
             f.seek(offset)
             result = f.read(size)
 
-        debug('Cacher  returning result from cache', type(result), len(result))
         return result
 
     def readdir(self, path, offset):
         """List the given directory, from the cache."""
-        debug('Cacher.readdir({}, {})'.format(path, offset))
+        debug('Cacher.readdir', path, offset)
         cache_dir = self._get_cache_dir(path, 'cache.list')
 
         result = None
         if os.path.exists(cache_dir):
-            debug('Cacher.readdir getting from cache', path)
             with __builtin__.open(cache_dir, 'rb') as list_cache_file:
                 result = pickle.load(list_cache_file)
 
         else:
-            debug('Cacher.readdir asking ufs for listing', path)
             result_generator = self.underlying_fs.readdir(path, offset)
             result = list(result_generator)
 
@@ -402,18 +397,16 @@ class Cacher:
 
     def getattr(self, path):
         """Retrieve stat information for a particular file from the cache."""
-        debug('Cacher.getattr({})'.format(path))
+        debug('Cacher.getattr', path)
         cache_dir = self._get_cache_dir(path, 'cache.stat')
 
         result = None
         if os.path.exists(cache_dir):
             with __builtin__.open(cache_dir, 'rb') as stat_cache_file:
                 result = pickle.load(stat_cache_file)
-                debug('Cacher.getattr fetching from cache', path)
 
         else:
             result = self.underlying_fs.getattr(path)
-            debug('Cacher.getattr getting from filesystem', path)
 
             self._create_cache_dir(path)
             with __builtin__.open(cache_dir, 'wb') as stat_cache_file:
@@ -422,6 +415,7 @@ class Cacher:
         return result
 
     def write(self, path, buf, offset):
+        debug('Cacher.write', path, buf, offset)
         return -errno.ENOSYS
 
     def _get_cache_dir(self, path, file = None):
@@ -441,7 +435,6 @@ class Cacher:
 
     def _mkdir(self, path):
         """Create the given directory if it does not already exist."""
-        debug('mkdir "' + path + '", os: ' + str(type(os)))
         if not os.path.exists(path):
             os.makedirs(path)
 
