@@ -56,6 +56,12 @@ def write_to_file(dirname, path, content):
     time.sleep(.1)
 
 
+def create_directory(dirname, path):
+    os.makedirs(os.path.join(dirname, *path))
+    # Needed to let pcachefs propagate changes
+    time.sleep(.1)
+
+
 def read_from_file(dirname, path):
     try:
         with open(os.path.join(dirname, *path), 'r') as f:
@@ -125,3 +131,48 @@ def test_only_cached_file_at_read(pcachefs, sourcedir, mountdir):
     assert 'a' in list_dir(mountdir)
     assert read_from_file(sourcedir, ['a']) == '2'
     assert read_from_file(mountdir, ['a']) == '2'
+
+
+def test_create_directory(pcachefs, sourcedir, mountdir):
+    assert 'a' not in list_dir(sourcedir)
+    assert 'a' not in list_dir(mountdir)
+    assert read_from_file(sourcedir, ['a']) == None
+    assert read_from_file(mountdir, ['a']) == None
+
+    create_directory(sourcedir, ['a'])
+    assert 'a' in list_dir(sourcedir)
+    assert 'a' in list_dir(mountdir)
+    write_to_file(sourcedir, ['a', 'a'], '1')
+    assert 'a' in list_dir(sourcedir)
+    assert 'a' in list_dir(mountdir)
+    assert read_from_file(sourcedir, ['a', 'a']) == '1'
+    assert read_from_file(mountdir, ['a', 'a']) == '1'
+
+
+def test_cached_directory_not_updated(pcachefs, sourcedir, mountdir):
+    assert 'a' not in list_dir(sourcedir)
+    assert 'a' not in list_dir(mountdir)
+    assert read_from_file(sourcedir, ['a']) == None
+    assert read_from_file(mountdir, ['a']) == None
+
+    create_directory(sourcedir, ['a'])
+    assert 'a' in list_dir(sourcedir)
+    assert 'a' in list_dir(mountdir)
+    write_to_file(sourcedir, ['a', 'a'], '1')
+    assert 'a' in list_dir(sourcedir, ['a'])
+    assert 'a' in list_dir(mountdir, ['a'])
+    assert read_from_file(sourcedir, ['a', 'a']) == '1'
+    assert read_from_file(mountdir, ['a', 'a']) == '1'
+
+    # FIXME: not consistent behavior, b does not appear in listdir
+    # although we can read the file.
+    write_to_file(sourcedir, ['a', 'a'], '2')
+    write_to_file(sourcedir, ['a', 'b'], '3')
+    assert 'a' in list_dir(sourcedir, ['a'])
+    assert 'a' in list_dir(mountdir, ['a'])
+    assert 'b' in list_dir(sourcedir, ['a'])
+    assert 'b' not in list_dir(mountdir, ['a'])
+    assert read_from_file(sourcedir, ['a', 'a']) == '2'
+    assert read_from_file(mountdir, ['a', 'a']) == '1'
+    assert read_from_file(sourcedir, ['a', 'b']) == '3'
+    assert read_from_file(mountdir, ['a', 'b']) == '3'
