@@ -148,6 +148,12 @@ class Ranges(object):
 
         return False
 
+    def number(self):
+        num = 0
+        for r in self.ranges:
+            num += r.end - r.start
+        return num
+
     def get_uncovered_portions(self, range):
         """Determine which parts of range are not covered by ranges within this Ranges object.
 

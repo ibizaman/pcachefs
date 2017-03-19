@@ -34,6 +34,7 @@ from pprint import pformat
 
 import factory
 import fuse
+from pcachefsutil import E_NO_SUCH_FILE
 from optparse import OptionGroup
 
 import vfs
@@ -79,6 +80,7 @@ class FuseStat(fuse.Stat):
         v['is_sock'] = stat.S_ISSOCK(v['st_mode'])
         return pformat(v)
 
+
 class PersistentCacheFs(fuse.Fuse):
     """Main FUSE class
 
@@ -93,6 +95,7 @@ class PersistentCacheFs(fuse.Fuse):
 
         self.parser.add_option('-c', '--cache-dir', dest='cache_dir', help="Specifies the directory where cached data should be stored. This will be created if it does not exist.")
         self.parser.add_option('-t', '--target-dir', dest='target_dir', help="The directory which we are caching. The content of this directory will be mirrored and all reads cached.")
+        self.parser.add_option('-v', '--virtual-dir', dest='virtual_dir', help="The folder in the mount dir in which the virtual filesystem controlling pcachefs will reside.")
 
     def main(self, args=None):
         options = self.cmdline[0]
@@ -104,18 +107,10 @@ class PersistentCacheFs(fuse.Fuse):
 
         self.cache_dir = options.cache_dir
         self.target_dir = options.target_dir
+        self.virtual_dir = options.virtual_dir or '.pcachefs'
 
         self.cacher = Cacher(self.cache_dir, UnderlyingFs(self.target_dir))
-
-        # Initialise the VirtualFileFS, which contains 'virtual' files
-        # which can be used by user apps to read and change internal
-        # pcachefs state
-        self.vfs = vfs.VirtualFileFS('.pcachefs.')
-        self.vfs.add_file(
-            vfs.BooleanVirtualFile('cache_only',
-                callback_on_true = self.cacher.cache_only_mode_enable,
-                callback_on_false = self.cacher.cache_only_mode_disable)
-        )
+        self.vfs = vfs.VirtualFS(self.virtual_dir, self.cacher)
 
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         fuse.Fuse.main(self, args)
@@ -130,6 +125,8 @@ class PersistentCacheFs(fuse.Fuse):
     def readdir(self, path, offset):
         debug('PersistentCacheFs.readdir', path, offset)
         for f in self.vfs.readdir(path, offset):
+            if f is None:
+                return
             yield f
 
         for f in self.cacher.readdir(path, offset):
@@ -153,6 +150,13 @@ class PersistentCacheFs(fuse.Fuse):
             return self.vfs.read(path, size, offset)
 
         return self.cacher.read(path, size, offset)
+
+    def truncate(self, path, size):
+        debug('PersistentCacheFs.truncate', path, size)
+        if self.vfs.contains(path):
+            return self.vfs.truncate(path, size)
+
+        return E_NOT_IMPL
 
     def write(self, path, buf, offset):
         debug('PersistentCacheFs.write', path, buf, offset)
@@ -325,33 +329,41 @@ class Cacher:
         with __builtin__.open(data_cache_range, 'wb') as f:
             pickle.dump(cached_blocks, f)
 
-    def read(self, path, size, offset):
+    def remove_cached_blocks(self, path):
+        data_cache_range = self._get_cache_dir(path, 'cache.data.range')
+
+        os.remove(data_cache_range)
+
+    def read(self, path, size, offset, force_reload=False):
         """Read the given data from the given path on the filesystem.
 
         Any parts which are requested and are not in the cache are read
         from the underlying filesystem
         """
         debug('Cacher.read', path, size, offset)
-        cache_data = self._get_cache_dir(path, 'cache.data')
 
         # list of Range objects indicating which chunks of the requested data
         # we have not yet cached and will need to get from the underlying fs
         requested_range = Range(offset, offset+size)
-        cached_blocks = self.get_cached_blocks(path)
-        blocks_to_read = cached_blocks.get_uncovered_portions(requested_range)
 
         # First, create the cache file if it does not exist already
-        if not os.path.exists(cache_data):
+        cache_data = self._get_cache_dir(path, 'cache.data')
+        if force_reload or not os.path.exists(cache_data):
             # We create a file full of zeroes the same size as the real file
             file_stat = self.getattr(path)
             self._create_cache_dir(path)
 
             with __builtin__.open(cache_data, 'wb') as f:
+                f.truncate()
                 f.seek(file_stat.st_size - 1)
                 f.write('\0')
+            self.remove_cached_blocks(path)
 
                 #for i in range(1, file_stat.st_size):
                 #    f.write('\0')
+
+        cached_blocks = self.get_cached_blocks(path)
+        blocks_to_read = cached_blocks.get_uncovered_portions(requested_range)
 
         # If there are no blocks_to_read, then don't bother opening
         # the cache_data file for updates or dumping our cached_blocks.

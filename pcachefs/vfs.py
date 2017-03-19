@@ -156,57 +156,8 @@ class SimpleVirtualFile:
         return None
 
 
-class BooleanVirtualFile(SimpleVirtualFile):
-    """
-    A virtual file whose content is either '0' or '1'. You can specify
-    function callbacks, which will be called when the file's content is
-    changed and which are used to read the current value.
-
-    If the 'callback_on_true' and 'callback_on_false' properties are
-    both None, then this file is marked read-only and cannot be changed.
-    """
-    def __init__(self, name, callback_on_read = None, callback_on_true = None, callback_on_false = None):
-        # "2" so as not to override superclass method
-        self.callback_on_read2 = callback_on_read
-
-        self.callback_on_true = callback_on_true
-        self.callback_on_false = callback_on_false
-
-        coc = self._change
-        if callback_on_true == None and callback_on_false == None:
-            coc = None
-
-        SimpleVirtualFile.__init__(self, name, self._read, callback_on_change=coc)
-
-        self.value = False
-
-    def _read(self):
-        if self.callback_on_read2 != None:
-            self.callback_on_read2(self.value)
-
-        if self.value:
-            return '1'
-        else:
-            return '0'
-
-    def _change(self, value):
-        if value == '0':
-            self.value = False
-        elif value.strip() == '':
-            self.value = False
-        else:
-            self.value = True
-
-        if self.value:
-            if self.callback_on_true != None:
-                self.callback_on_true()
-        else:
-            if self.callback_on_false != None:
-                self.callback_on_false()
-
-
-class VirtualFileFS(object):
-    """Provides a fuse interface to 'virtual' files.
+class VirtualFS(object):
+    """Provides a fuse interface to 'virtual' files and directories.
 
     This class deliberately mimics the FUSE interface, so you can
     delegate to it from a real FUSE filesystem, or use it in some other
@@ -215,133 +166,71 @@ class VirtualFileFS(object):
     Virtual files are represented by instances of VirtualFile stored in
     a dict. Virtual files can be made read-only or writeable.
     """
-    def __init__(self, prefix, files = []):
+    def __init__(self, root, cacher):
         """Initialise a new VirtualFileFS.
 
-        Prefix the prefix that the names of all virtual files will have
-        (virtual files always reside in the root directory, /) files an
-        optional list of VirtualFile instances to initalise with.
+        Root folder under which all virtual objects will reside.
         """
-        # ensure prefix always starts with '/'
-        if prefix.startswith('/'):
-            self.prefix = prefix
-        else:
-            self.prefix = '/' + prefix
+        self.root = root
+        self.cacher = cacher
 
-        self.files = {}
-        for f in files:
-            self.files[f.name] = f
-
-    def add_file(self, virtual_file):
-        """Add a new VirtualFile to this VirtualFileFS.
-
-        Any VirtualFile with the same name will be automatically removed
-        before virtual_file is added.
-        """
-        self.files[virtual_file.name] = virtual_file
-
-    def remove_file(self, path):
-        """Remove the virtual file with the given path (or name)."""
-        for n in [ path, self._get_filename(path) ]:
-            if self.files.contains(n):
-                del self.files[n]
-                return
-
-        raise ValueError('path not found: ' + str(path))
-
-    def is_virtual(self, path):
-        """Returns true if the given path begins with the prefix this
-        VirtualFileFS was created with.
-
-        Whether the virtual path exists or not is ignored.
-        """
-        return path.startswith(self.prefix)
+    def get_relative_path(self, path):
+        """Returns path relative to the given root virtual folder."""
+        path_xpl = path.split(os.sep)
+        if path_xpl[0] == '' and path_xpl[1] == self.root:
+            if len(path_xpl) > 2:
+                return os.path.join(*path_xpl[2:])
+            else:
+                return ''
+        return None
 
     def contains(self, path):
         """Returns true if the given path exists as a virtual file."""
-        return self.get_file(path) != None
+        return self.get_relative_path(path) is not None
 
-    def _get_filename(self, path):
-        """Extract the name of a VirtualFile from the given path."""
-        # self.prefix contains full prefix, including root path element '/'
-        if path.startswith(self.prefix):
-            return path[len(self.prefix):]
-        return None
-
-    def get_file(self, path):
-        """Get the VirtualFile present at path, if there is any."""
-        name = self._get_filename(path)
-        debug('VirtualFileFS.get_file', path, name)
-        if name != None and name in self.files:
-            return self.files[name]
-
-        return None
 
     def getattr(self, path):
         """Retrieve attributes of a path in the VirtualFS."""
-        debug('VirtualFileFS.getattr', path)
-        virtual_file = self.get_file(path)
-
-        if virtual_file == None:
+        debug('VirtualFS.getattr', path)
+        virtual_path = self.get_relative_path(path)
+        if virtual_path is None:
             return E_NO_SUCH_FILE
 
-        result = fuse.Stat()
-
-        if virtual_file.is_read_only():
-            result.st_mode = stat.S_IFREG | 0444
+        parent_path = os.sep + os.path.dirname(virtual_path)
+        parent_is_file = stat.S_ISREG(self.cacher.getattr(parent_path).st_mode)
+        if parent_is_file:
+            if os.path.basename(virtual_path) not in ['cached']:
+                return E_NO_SUCH_FILE
+            return self.cacher.getattr(parent_path)
         else:
-            result.st_mode = stat.S_IFREG | 0644
-
-        # Always 1 for now (seems to be safe for files and dirs)
-        result.st_nlink = 1
-
-        result.st_size = virtual_file.size()
-
-        # Must return seconds-since-epoch timestamps
-        result.st_atime = virtual_file.atime()
-        result.st_mtime = virtual_file.mtime()
-        result.st_ctime = virtual_file.ctime()
-
-        # You can set these to anything, they're set by FUSE
-        result.st_dev = 1
-        result.st_ino = 1
-
-        # GetContext() returns uid/gid of the process that
-        # initiated the syscall currently being handled
-        context = fuse.FuseGetContext()
-        if virtual_file.uid() == None:
-            result.st_uid = context['uid']
-        else:
-            result.st_uid = virtual_file.uid()
-
-        if virtual_file.gid() == None:
-            result.st_gid = context['gid']
-        else:
-            result.st_gid = virtual_file.gid()
-
-        return result
+            a = self.cacher.getattr(os.sep + virtual_path)
+            a.st_mode = stat.S_IFDIR | 0o777
+            return a
 
     def readdir(self, path, offset):
-        debug('VirtualFileFS.readdir', path, offset)
-        dirents = []
+        debug('VirtualFS.readdir', path, offset)
+        virtual_path = self.get_relative_path(path)
+        if virtual_path is not None:
+            is_file = stat.S_ISREG(self.cacher.getattr(os.sep + virtual_path).st_mode)
+            if is_file:
+                yield fuse.Direntry('cached')
+            else:
+                for f in self.cacher.readdir(os.sep + virtual_path, offset):
+                    yield fuse.Direntry(f.name)
+            yield None
 
-        # Only add files if we're in the root directory
         if path == '/':
-            for k in self.files.keys():
-                # strip leading '/' from self.prefix before building filename
-                dirents.append(self.prefix[1:] + k)
-
-        # return a generator over the entries in the directory
-        return (fuse.Direntry(r) for r in dirents)
+            yield fuse.Direntry(self.root)
 
     def open(self, path, flags):
-        debug('VirtualFileFS.open', path, flags)
-        file = self.get_file(path)
-
-        if file == None:
+        debug('VirtualFS.open', path, flags)
+        virtual_path = self.get_relative_path(path)
+        if virtual_path is None:
             return E_NO_SUCH_FILE
 
-        elif file.is_read_only():
+        if os.path.basename(virtual_path) in ['cached']:
+            return 0
+        else:
             # Only support for 'READ ONLY' flag
             access_flags = os.O_RDONLY | os.O_WRONLY | os.O_RDWR
             if flags & access_flags != os.O_RDONLY:
@@ -349,41 +238,100 @@ class VirtualFileFS(object):
             else:
                 return 0
 
-        else:
-            return 0 # Always succeed
-
     def read(self, path, size, offset):
-        debug('VirtualFileFS.read', path, size, offset)
-        f = self.get_file(path)
-        return f.read(size, offset)
+        debug('VirtualFS.read', path, size, offset)
+        virtual_path = self.get_relative_path(path)
+        if virtual_path is None:
+            return E_NO_SUCH_FILE
+
+        parent_path = os.sep + os.path.dirname(virtual_path)
+        parent_is_file = stat.S_ISREG(self.cacher.getattr(parent_path).st_mode)
+        if not parent_is_file:
+            return E_NO_SUCH_FILE
+
+        basename = os.path.basename(virtual_path)
+        if basename != 'cached':
+            return E_NO_SUCH_FILE
+
+        attr = self.cacher.getattr(parent_path)
+        return str(self.cacher.get_cached_blocks(parent_path).number() / float(attr.st_size * attr.st_blksize))
 
     def mknod(self, path, mode, dev):
-        debug('VirtualFileFS.mknod', path, mode, dev)
+        debug('VirtualFS.mknod', path, mode, dev)
         # Don't allow creation of new files
         return E_PERM_DENIED
 
     def unlink(self, path):
-        debug('VirtualFileFS.unlink', path)
+        debug('VirtualFS.unlink', path)
         # Don't allow removal of files
         return E_PERM_DENIED
 
     def write(self, path, buf, offset):
-        debug('VirtualFileFS.write', path, buf, offset)
-        f = self.get_file(path)
-        return f.write(buf, offset)
+        debug('VirtualFS.write', path, buf, offset)
+        virtual_path = self.get_relative_path(path)
+        if virtual_path is None:
+            return E_NO_SUCH_FILE
+
+        basename = os.path.basename(virtual_path)
+        if basename == 'cached':
+            real_path = os.sep + os.path.dirname(virtual_path)
+            attr = self.cacher.underlying_fs.getattr(real_path)
+            size = attr.st_size * attr.st_blksize
+            self.cacher.read(real_path, size, 0, force_reload=True)
+            return len(buf)
+        else:
+            return E_NO_SUCH_FILE
 
     def truncate(self, path, size):
-        debug('VirtualFileFS.truncate', path, size)
-        f = self.get_file(path)
-        return f.truncate(size)
+        debug('VirtualFS.truncate', path, size)
+        return 0
 
     def flush(self, path, fh=None):
-        debug('VirtualFileFS.flush', path)
-        f = self.get_file(path)
-        return f.flush()
+        debug('VirtualFS.flush', path)
+        return 0
 
     def release(self, path, fh=None):
-        debug('VirtualFileFS.release', path)
-        f = self.get_file(path)
-        return f.release()
+        debug('VirtualFS.release', path)
+        return 0
 
+
+def fake_stat(self, virtual_file):
+    """Create fuse stat from file."""
+    if virtual_file == None:
+        return E_NO_SUCH_FILE
+
+    result = fuse.Stat()
+
+    if virtual_file.is_read_only():
+        result.st_mode = stat.S_IFREG | 0o444
+    else:
+        result.st_mode = stat.S_IFREG | 0o644
+
+    # Always 1 for now (seems to be safe for files and dirs)
+    result.st_nlink = 1
+
+    result.st_size = virtual_file.size()
+
+    # Must return seconds-since-epoch timestamps
+    result.st_atime = virtual_file.atime()
+    result.st_mtime = virtual_file.mtime()
+    result.st_ctime = virtual_file.ctime()
+
+    # You can set these to anything, they're set by FUSE
+    result.st_dev = 1
+    result.st_ino = 1
+
+    # GetContext() returns uid/gid of the process that
+    # initiated the syscall currently being handled
+    context = fuse.FuseGetContext()
+    if virtual_file.uid() == None:
+        result.st_uid = context['uid']
+    else:
+        result.st_uid = virtual_file.uid()
+
+    if virtual_file.gid() == None:
+        result.st_gid = context['gid']
+    else:
+        result.st_gid = virtual_file.gid()
+
+    return result

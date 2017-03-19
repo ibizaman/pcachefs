@@ -71,6 +71,10 @@ def read_from_file(dirname, path):
         return None
 
 
+def remove_file(dirname, path):
+    os.remove(os.path.join(dirname, *path))
+
+
 class ListDir(object):
     def __init__(self, files, dirs):
         self.files = sorted(list(files))
@@ -176,3 +180,29 @@ def test_cached_directory_not_updated(pcachefs, sourcedir, mountdir):
     assert read_from_file(mountdir, ['a', 'a']) == '1'
     assert read_from_file(sourcedir, ['a', 'b']) == '3'
     assert read_from_file(mountdir, ['a', 'b']) == '3'
+
+
+def test_read_cache(pcachefs, sourcedir, mountdir):
+    write_to_file(sourcedir, ['a'], '1')
+    assert list_dir(mountdir) == ListDir(['a'], ['.pcachefs'])
+    assert list_dir(mountdir, ['.pcachefs']) == ListDir([], ['a'])
+    assert list_dir(mountdir, ['.pcachefs', 'a']) == ListDir(['cached'], [])
+    assert read_from_file(mountdir, ['.pcachefs', 'a', 'cached']) == '0'
+    read_from_file(mountdir, ['a'])
+    assert read_from_file(mountdir, ['.pcachefs', 'a', 'cached']) == '1'
+
+
+def test_reload_cache(pcachefs, sourcedir, mountdir):
+    write_to_file(sourcedir, ['a'], '1')
+    # load in cache
+    read_from_file(mountdir, ['a'])
+    write_to_file(sourcedir, ['a'], '2')
+    assert read_from_file(mountdir, ['a']) == '1'
+    assert list_dir(mountdir) == ListDir(['a'], ['.pcachefs'])
+    assert read_from_file(mountdir, ['.pcachefs', 'a', 'cached']) == '1'
+    write_to_file(mountdir, ['.pcachefs', 'a', 'cached'], '1')
+    # remove source file
+    remove_file(sourcedir, ['a'])
+    assert read_from_file(mountdir, ['.pcachefs', 'a', 'cached']) == '1'
+    assert read_from_file(mountdir, ['a']) == '2'
+
