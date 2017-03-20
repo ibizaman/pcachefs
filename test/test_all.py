@@ -206,3 +206,14 @@ def test_reload_cache(pcachefs, sourcedir, mountdir):
     assert read_from_file(mountdir, ['.pcachefs', 'a', 'cached']) == '1'
     assert read_from_file(mountdir, ['a']) == '2'
 
+
+def test_remove_cache(pcachefs, sourcedir, mountdir, cachedir):
+    assert read_from_file(cachedir, 'cache.data') is None
+    write_to_file(sourcedir, ['a'], '1')
+    assert read_from_file(mountdir, ['a']) == '1'
+    assert read_from_file(cachedir, ['a', 'cache.data']) == '1'
+    write_to_file(mountdir, ['.pcachefs', 'a', 'cached'], '0')
+    assert read_from_file(cachedir, ['a', 'cache.data']) is None
+    assert read_from_file(mountdir, ['a']) == '1'
+    assert read_from_file(cachedir, ['a', 'cache.data']) == '1'
+

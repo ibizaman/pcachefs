@@ -275,9 +275,14 @@ class VirtualFS(object):
         basename = os.path.basename(virtual_path)
         if basename == 'cached':
             real_path = os.sep + os.path.dirname(virtual_path)
-            attr = self.cacher.underlying_fs.getattr(real_path)
-            size = attr.st_size * attr.st_blksize
-            self.cacher.read(real_path, size, 0, force_reload=True)
+            if buf == '1':
+                attr = self.cacher.underlying_fs.getattr(real_path)
+                size = attr.st_size * attr.st_blksize
+                self.cacher.read(real_path, size, 0, force_reload=True)
+            elif buf == '0':
+                self.cacher.remove_cached_data(real_path)
+            else:
+                return E_NOT_IMPL
             return len(buf)
         else:
             return E_NO_SUCH_FILE

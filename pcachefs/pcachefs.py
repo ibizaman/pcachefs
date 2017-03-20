@@ -376,6 +376,13 @@ class Cacher:
                 cache_data_file.seek(block.start)
                 cache_data_file.write(block_data) # overwrites existing data in the file
 
+    def remove_cached_data(self, path):
+        data_cache = self._get_cache_dir(path, 'cache.data')
+        os.remove(data_cache)
+
+        data_cache_range = self._get_cache_dir(path, 'cache.data.range')
+        os.remove(data_cache_range)
+
     def read(self, path, size, offset, force_reload=False):
         """Read the given data from the given path on the filesystem.
 
