@@ -130,6 +130,12 @@ class Ranges(object):
     def add_range(self, range):
         self.ranges.append(range)
         self._cleanup()
+        return self
+
+    def add_ranges(self, ranges):
+        for range in ranges:
+            self.add_range(range)
+        return self
 
     def contains(self, i):
         """Determines if i is contained within this list of ranges.

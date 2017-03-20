@@ -334,6 +334,48 @@ class Cacher:
 
         os.remove(data_cache_range)
 
+    def get_cached_data(self, path, size, offset):
+        cache_data = self._get_cache_dir(path, 'cache.data')
+
+        result = None
+        with __builtin__.open(cache_data, 'rb') as f:
+            f.seek(offset)
+            result = f.read(size)
+
+        return result
+
+    def init_cached_data(self, path):
+        cache_data = self._get_cache_dir(path, 'cache.data')
+
+        if os.path.exists(cache_data):
+            return
+
+        file_stat = self.getattr(path)
+        self._create_cache_dir(path)
+
+        with __builtin__.open(cache_data, 'wb') as f:
+            f.truncate()
+            f.seek(file_stat.st_size - 1)
+            f.write('\0')
+
+    def update_cached_data(self, path, blocks_to_read):
+        if len(blocks_to_read) == 0:
+            return
+
+        cache_data = self._get_cache_dir(path, 'cache.data')
+
+        # Now open it up in update mode so we can add data to it as
+        # we read the data from the underlying filesystem
+        with __builtin__.open(cache_data, 'r+b') as cache_data_file:
+
+            # Now loop through all the blocks we need to get
+            # and append them to the cached file as we go
+            for block in blocks_to_read:
+                block_data = self.underlying_fs.read(path, block.size, block.start)
+
+                cache_data_file.seek(block.start)
+                cache_data_file.write(block_data) # overwrites existing data in the file
+
     def read(self, path, size, offset, force_reload=False):
         """Read the given data from the given path on the filesystem.
 
@@ -342,59 +384,19 @@ class Cacher:
         """
         debug('Cacher.read', path, size, offset)
 
-        # list of Range objects indicating which chunks of the requested data
-        # we have not yet cached and will need to get from the underlying fs
-        requested_range = Range(offset, offset+size)
+        self.init_cached_data(path)
 
-        # First, create the cache file if it does not exist already
-        cache_data = self._get_cache_dir(path, 'cache.data')
-        if force_reload or not os.path.exists(cache_data):
-            # We create a file full of zeroes the same size as the real file
-            file_stat = self.getattr(path)
-            self._create_cache_dir(path)
-
-            with __builtin__.open(cache_data, 'wb') as f:
-                f.truncate()
-                f.seek(file_stat.st_size - 1)
-                f.write('\0')
+        if force_reload:
             self.remove_cached_blocks(path)
 
-                #for i in range(1, file_stat.st_size):
-                #    f.write('\0')
-
         cached_blocks = self.get_cached_blocks(path)
-        blocks_to_read = cached_blocks.get_uncovered_portions(requested_range)
+        blocks_to_read = cached_blocks.get_uncovered_portions(Range(offset, offset+size))
 
-        # If there are no blocks_to_read, then don't bother opening
-        # the cache_data file for updates or dumping our cached_blocks.
-        # This will slightly improve performance when getting data which
-        # is already in the cache.
-        if len(blocks_to_read) > 0:
+        self.update_cached_data(path, blocks_to_read)
+        self.update_cached_blocks(path, cached_blocks.add_ranges(blocks_to_read))
 
-            # Now open it up in update mode so we can add data to it as
-            # we read the data from the underlying filesystem
-            with __builtin__.open(cache_data, 'r+b') as cache_data_file:
+        return self.get_cached_data(path, size, offset)
 
-                # Now loop through all the blocks we need to get
-                # and append them to the cached file as we go
-                for block in blocks_to_read:
-                    block_data = self.underlying_fs.read(path, block.size, block.start)
-
-                    cached_blocks.add_range(block)
-
-                    cache_data_file.seek(block.start)
-                    cache_data_file.write(block_data) # overwrites existing data in the file
-
-            self.update_cached_blocks(path, cached_blocks)
-
-        # Now we have loaded all the data we need to into the cache, we do the read
-        # from the cached file
-        result = None
-        with __builtin__.open(cache_data, 'rb') as f:
-            f.seek(offset)
-            result = f.read(size)
-
-        return result
 
     def readdir(self, path, offset):
         """List the given directory, from the cache."""
