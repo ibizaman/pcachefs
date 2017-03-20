@@ -236,7 +236,7 @@ class UnderlyingFs:
 
     def getattr(self, path):
         debug('UnderlyingFs.getattr', path)
-        return factory.create(FuseStat, os.stat(self._get_real_path(path)))
+        return FuseStat(os.stat(self._get_real_path(path)))
 
     def readdir(self, path, offset):
         debug('UnderlyingFs.readdir', path, offset)
