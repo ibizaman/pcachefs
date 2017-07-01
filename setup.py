@@ -3,11 +3,11 @@ from setuptools import setup
 
 setup(
     name='pCacheFS',
-    version='0.2',
+    version='0.3',
     description='Persistent Caching FUSE Filesystem',
     keywords=['fuse', 'cache'],
-    author='Jonny Tyers',
-    author_email='jonnyt886@gmail.com',
+    author='Pierre Penninckx',
+    author_email='ibizapeanut@gmail.com',
     url='http://code.google.com/p/pcachefs',
     license='Apache 2.0',
 
