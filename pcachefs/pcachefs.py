@@ -23,22 +23,17 @@ import os
 import pickle
 import signal
 import stat
-import sys
-import time
-import types
 # We explicitly refer to __builtin__ here so it can be mocked
 import __builtin__
 
-from datetime import datetime
 from pprint import pformat
 
 import fuse
-from pcachefsutil import E_NO_SUCH_FILE
-from optparse import OptionGroup
 
 import vfs
 from ranges import (Ranges, Range)
-from pcachefsutil import debug
+from pcachefsutil import debug, is_read_only_flags
+from pcachefsutil import E_PERM_DENIED, E_NOT_IMPL
 
 
 fuse.fuse_python_api = (0, 2)
@@ -50,23 +45,23 @@ class FuseStat(fuse.Stat):
     Set up the stat object based on values from the given stat object
     (which should come from os.stat()).
     """
-    def __init__(self, stat):
+    def __init__(self, st):
         fuse.Stat.__init__(self)
 
-        self.st_mode = stat.st_mode
-        self.st_nlink = stat.st_nlink
-        self.st_size = stat.st_size
-        self.st_atime = stat.st_atime
-        self.st_mtime = stat.st_mtime
-        self.st_ctime = stat.st_ctime
+        self.st_mode = st.st_mode
+        self.st_nlink = st.st_nlink
+        self.st_size = st.st_size
+        self.st_atime = st.st_atime
+        self.st_mtime = st.st_mtime
+        self.st_ctime = st.st_ctime
 
-        self.st_dev = stat.st_dev
-        self.st_gid = stat.st_gid
-        self.st_ino = stat.st_ino
-        self.st_uid = stat.st_uid
+        self.st_dev = st.st_dev
+        self.st_gid = st.st_gid
+        self.st_ino = st.st_ino
+        self.st_uid = st.st_uid
 
-        self.st_rdev = stat.st_rdev
-        self.st_blksize = stat.st_blksize
+        self.st_rdev = st.st_rdev
+        self.st_blksize = st.st_blksize
 
     def __repr__(self):
         v = vars(self)
@@ -90,18 +85,24 @@ class PersistentCacheFs(fuse.Fuse):
 
         # Currently we have to run in single-threaded mode to prevent
         # the cache becoming corrupted
-        fuse_opts = self.parse(['-s'])
+        self.parse(['-s'])
 
         self.parser.add_option('-c', '--cache-dir', dest='cache_dir', help="Specifies the directory where cached data should be stored. This will be created if it does not exist.")
         self.parser.add_option('-t', '--target-dir', dest='target_dir', help="The directory which we are caching. The content of this directory will be mirrored and all reads cached.")
         self.parser.add_option('-v', '--virtual-dir', dest='virtual_dir', help="The folder in the mount dir in which the virtual filesystem controlling pcachefs will reside.")
 
+        self.cache_dir = None
+        self.target_dir = None
+        self.virtual_dir = None
+        self.cacher = None
+        self.vfs = None
+
     def main(self, args=None):
         options = self.cmdline[0]
 
-        if options.cache_dir == None:
+        if options.cache_dir is None:
             self.parser.error('Need to specify --cache-dir')
-        if options.target_dir == None:
+        if options.target_dir is None:
             self.parser.error('Need to specify --target-dir')
 
         self.cache_dir = options.cache_dir
@@ -136,12 +137,10 @@ class PersistentCacheFs(fuse.Fuse):
         if self.vfs.contains(path):
             return self.vfs.open(path, flags)
 
-        # Only support for 'READ ONLY' flag
-        access_flags = os.O_RDONLY | os.O_WRONLY | os.O_RDWR
-        if flags & access_flags != os.O_RDONLY:
+        if not is_read_only_flags(flags):
             return E_PERM_DENIED
-        else:
-            return 0
+
+        return 0
 
     def read(self, path, size, offset):
         debug('PersistentCacheFs.read', path, size, offset)
@@ -217,7 +216,7 @@ class PersistentCacheFs(fuse.Fuse):
 #        else:
 #            return E_NO_SUCH_FILE
 
-class UnderlyingFs:
+class UnderlyingFs(object):
     """Implementation of FUSE operations that fetches data from the underlying FS."""
     def __init__(self, real_path):
         self.real_path = real_path
@@ -227,11 +226,6 @@ class UnderlyingFs:
             raise ValueError("Expected leading slash")
 
         return os.path.join(self.real_path, path[1:])
-
-    def _create_direntry(self, path):
-        dtype = 0
-
-        return fuse.Direntry(os.path.basename(r))
 
     def getattr(self, path):
         debug('UnderlyingFs.getattr', path)
@@ -261,7 +255,7 @@ class UnderlyingFs:
         return result
 
 
-class Cacher:
+class Cacher(object):
     """
     Represents a cache, which caches entire files and their content.
     This class mimics the interface of a python Fuse object.
@@ -358,7 +352,7 @@ class Cacher:
             f.write('\0')
 
     def update_cached_data(self, path, blocks_to_read):
-        if len(blocks_to_read) == 0:
+        if not blocks_to_read:
             return
 
         cache_data = self._get_cache_dir(path, 'cache.data')
@@ -444,26 +438,26 @@ class Cacher:
 
         return result
 
-    def write(self, path, buf, offset):
+    def write(self, path, buf, offset):  # pylint: disable=no-self-use
         debug('Cacher.write', path, buf, offset)
-        return -errno.ENOSYS
+        return E_NOT_IMPL
 
     def _get_cache_dir(self, path, file = None):
         """For a given path, return the name of the directory used to cache data for that path."""
         if path[0] != '/':
             raise ValueError("Expected leading slash")
 
-        if file == None:
+        if file is None:
             return os.path.join(self.cachedir, path[1:])
-        else:
-            return os.path.join(self.cachedir, path[1:], file)
+
+        return os.path.join(self.cachedir, path[1:], file)
 
     def _create_cache_dir(self, path):
         """Create the cache path for the given directory if it does not already exist."""
         cache_dir = self._get_cache_dir(path)
         self._mkdir(cache_dir)
 
-    def _mkdir(self, path):
+    def _mkdir(self, path):  # pylint: disable=no-self-use
         """Create the given directory if it does not already exist."""
         if not os.path.exists(path):
             os.makedirs(path)

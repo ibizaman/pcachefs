@@ -177,7 +177,7 @@ class Ranges(object):
 
         # if we have no ranges added then none of the given range will
         # be covered
-        if len(self.ranges) == 0:
+        if not self.ranges:
             return [ range ]
 
         # if the search range doesn't overlap any items in this range
@@ -239,7 +239,7 @@ class Ranges(object):
                 if i < len(self.ranges)-1:
                     next_item = self.ranges[i+1]
 
-                if next_item == None or search_range.end <= next_item.start:
+                if next_item is None or search_range.end <= next_item.start:
                     # if our search_range finishes before we get to the
                     # next item, then add a portion for search_range,
                     # and exit (since we've finished)
@@ -260,4 +260,3 @@ class Ranges(object):
                     i += 1 # move to next item
 
         return portions
-

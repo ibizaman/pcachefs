@@ -8,4 +8,3 @@ def removeMocks(request):
     This is needed when stubbing low-level stuff like os or os.path.
     """
     request.addfinalizer(unstub)
-

@@ -19,6 +19,14 @@ test2.7: clean venv2.7  ## Run tests with python2.7
 	.venv2.7/bin/python -mpytest test/test_all.py
 
 
+lint: venv2.7  ## Run linter
+	.venv2.7/bin/pylint --disable=fixme pcachefs test
+
+
+fixme: venv2.7  ## List fixme
+	.venv2.7/bin/pylint --disable=all --enable=fixme pcachefs test
+
+
 clean:  ## Remove temporary files
 	find . -name '*.pyc' -delete
 	rm -rf build dist *.egg-info test/testroot

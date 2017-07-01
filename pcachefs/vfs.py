@@ -4,11 +4,11 @@ import time
 
 import fuse
 
-from pcachefsutil import debug
-from pcachefsutil import (E_NO_SUCH_FILE, E_PERM_DENIED)
+from pcachefsutil import debug, is_read_only_flags
+from pcachefsutil import (E_NO_SUCH_FILE, E_PERM_DENIED, E_NOT_IMPL)
 
 
-class SimpleVirtualFile:
+class SimpleVirtualFile(object):
     """
     A Virtual File that allows you to specify callback functions, called
     when the file is read or changed.
@@ -34,7 +34,7 @@ class SimpleVirtualFile:
         self.content = None
 
     def _get_content(self):
-        if self.content == None:
+        if self.content is None:
             result = self.callback_on_read()
 
             # store content as a list representation of a string, so that
@@ -52,7 +52,7 @@ class SimpleVirtualFile:
 
         Returns true if no write_function is specified.
         """
-        return self.callback_on_change == None
+        return self.callback_on_change is None
 
     def read(self, size, offset):
         """Read content of this virtual file."""
@@ -105,7 +105,7 @@ class SimpleVirtualFile:
         # clear cache
         self.content = None
 
-    def flush(self):
+    def flush(self):  # pylint: disable=no-self-use
         """Flush any outstanding data waiting to be written to this virtual file.
 
         If you override this function you MUST also override is_read_only()
@@ -113,7 +113,7 @@ class SimpleVirtualFile:
         """
         return None
 
-    def atime(self):
+    def atime(self):  # pylint: disable=no-self-use
         """Returns the access time of the file.
 
         For use in calls to getattr(). The default implementation
@@ -121,7 +121,7 @@ class SimpleVirtualFile:
         """
         return time.mktime(time.gmtime())
 
-    def mtime(self):
+    def mtime(self):  # pylint: disable=no-self-use
         """Returns the modification time of the file.
 
         For use in calls to getattr(). The default implementation
@@ -129,7 +129,7 @@ class SimpleVirtualFile:
         """
         return time.mktime(time.gmtime())
 
-    def ctime(self):
+    def ctime(self):  # pylint: disable=no-self-use
         """Returns the creation time of the file.
 
         For use in calls to getattr(). The default implementation
@@ -137,7 +137,7 @@ class SimpleVirtualFile:
         """
         return time.mktime(time.gmtime())
 
-    def uid(self):
+    def uid(self):  # pylint: disable=no-self-use
         """Returns the UID that owns the file.
 
         The default implementation returns None, in which case the
@@ -146,7 +146,7 @@ class SimpleVirtualFile:
         """
         return None
 
-    def gid(self):
+    def gid(self):  # pylint: disable=no-self-use
         """Returns the GID that owns the file.
 
         The default implementation returns None, in which case the
@@ -180,8 +180,7 @@ class VirtualFS(object):
         if path_xpl[0] == '' and path_xpl[1] == self.root:
             if len(path_xpl) > 2:
                 return os.path.join(*path_xpl[2:])
-            else:
-                return ''
+            return ''
         return None
 
     def contains(self, path):
@@ -230,13 +229,11 @@ class VirtualFS(object):
 
         if os.path.basename(virtual_path) in ['cached']:
             return 0
-        else:
-            # Only support for 'READ ONLY' flag
-            access_flags = os.O_RDONLY | os.O_WRONLY | os.O_RDWR
-            if flags & access_flags != os.O_RDONLY:
-                return E_PERM_DENIED
-            else:
-                return 0
+
+        if not is_read_only_flags(flags):
+            return E_PERM_DENIED
+
+        return 0
 
     def read(self, path, size, offset):
         debug('VirtualFS.read', path, size, offset)
@@ -256,12 +253,12 @@ class VirtualFS(object):
         attr = self.cacher.getattr(parent_path)
         return str(self.cacher.get_cached_blocks(parent_path).number() / float(attr.st_size * attr.st_blksize))
 
-    def mknod(self, path, mode, dev):
+    def mknod(self, path, mode, dev):  # pylint: disable=no-self-use
         debug('VirtualFS.mknod', path, mode, dev)
         # Don't allow creation of new files
         return E_PERM_DENIED
 
-    def unlink(self, path):
+    def unlink(self, path):  # pylint: disable=no-self-use
         debug('VirtualFS.unlink', path)
         # Don't allow removal of files
         return E_PERM_DENIED
@@ -287,22 +284,22 @@ class VirtualFS(object):
         else:
             return E_NO_SUCH_FILE
 
-    def truncate(self, path, size):
+    def truncate(self, path, size):  # pylint: disable=no-self-use
         debug('VirtualFS.truncate', path, size)
         return 0
 
-    def flush(self, path, fh=None):
+    def flush(self, path, fh=None):  # pylint: disable=no-self-use, unused-argument
         debug('VirtualFS.flush', path)
         return 0
 
-    def release(self, path, fh=None):
+    def release(self, path, fh=None):  # pylint: disable=no-self-use, unused-argument
         debug('VirtualFS.release', path)
         return 0
 
 
-def fake_stat(self, virtual_file):
+def fake_stat(virtual_file):
     """Create fuse stat from file."""
-    if virtual_file == None:
+    if virtual_file is None:
         return E_NO_SUCH_FILE
 
     result = fuse.Stat()
@@ -329,12 +326,12 @@ def fake_stat(self, virtual_file):
     # GetContext() returns uid/gid of the process that
     # initiated the syscall currently being handled
     context = fuse.FuseGetContext()
-    if virtual_file.uid() == None:
+    if virtual_file.uid() is None:
         result.st_uid = context['uid']
     else:
         result.st_uid = virtual_file.uid()
 
-    if virtual_file.gid() == None:
+    if virtual_file.gid() is None:
         result.st_gid = context['gid']
     else:
         result.st_gid = virtual_file.gid()

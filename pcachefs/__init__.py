@@ -2,7 +2,7 @@
 pcachefs package.
 """
 
-from pcachefs import *
+from pcachefs import main
 
 from pcachefs import FuseStat
 from pcachefs import PersistentCacheFs

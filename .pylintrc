@@ -1,0 +1,27 @@
+[MASTER]
+
+ignore=.git
+persistent=no
+
+
+[MESSAGES CONTROL]
+
+disable=invalid-name,
+    bare-except,
+    broad-except,
+    missing-docstring,
+    redefined-builtin,
+    line-too-long,
+    too-many-arguments,
+    relative-import,
+    protected-access,
+    unidiomatic-typecheck,
+    too-few-public-methods,
+    too-many-instance-attributes,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-lines,
+    bad-builtin,
+    bad-whitespace,
+    redefined-variable-type,

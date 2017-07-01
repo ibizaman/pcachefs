@@ -2,6 +2,7 @@
 Utility methods used across pcachefs.
 """
 import errno
+import os
 import sys
 
 DEBUG = True
@@ -19,3 +20,7 @@ E_READ_ONLY = -errno.EROFS
 E_NOT_IMPL= -errno.ENOSYS
 E_INVALID_ARG = -errno.EINVAL
 
+
+def is_read_only_flags(flags):
+    access_flags = os.O_RDONLY | os.O_WRONLY | os.O_RDWR
+    return flags & access_flags == os.O_RDONLY

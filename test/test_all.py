@@ -1,3 +1,5 @@
+#For pytest, pylint: disable=redefined-outer-name, unused-argument
+
 import os
 import signal
 import shutil
@@ -112,8 +114,8 @@ def list_dir(dirname, path=None):
 def test_create_file(pcachefs, sourcedir, mountdir):
     assert 'a' not in list_dir(sourcedir)
     assert 'a' not in list_dir(mountdir)
-    assert read_from_file(sourcedir, ['a']) == None
-    assert read_from_file(mountdir, ['a']) == None
+    assert read_from_file(sourcedir, ['a']) is None
+    assert read_from_file(mountdir, ['a']) is None
 
     write_to_file(sourcedir, ['a'], '1')
     assert 'a' in list_dir(sourcedir)
@@ -145,8 +147,8 @@ def test_only_cached_file_at_read(pcachefs, sourcedir, mountdir):
 def test_create_directory(pcachefs, sourcedir, mountdir):
     assert 'a' not in list_dir(sourcedir)
     assert 'a' not in list_dir(mountdir)
-    assert read_from_file(sourcedir, ['a']) == None
-    assert read_from_file(mountdir, ['a']) == None
+    assert read_from_file(sourcedir, ['a']) is None
+    assert read_from_file(mountdir, ['a']) is None
 
     create_directory(sourcedir, ['a'])
     assert 'a' in list_dir(sourcedir)
@@ -161,8 +163,8 @@ def test_create_directory(pcachefs, sourcedir, mountdir):
 def test_cached_directory_not_updated(pcachefs, sourcedir, mountdir):
     assert 'a' not in list_dir(sourcedir)
     assert 'a' not in list_dir(mountdir)
-    assert read_from_file(sourcedir, ['a']) == None
-    assert read_from_file(mountdir, ['a']) == None
+    assert read_from_file(sourcedir, ['a']) is None
+    assert read_from_file(mountdir, ['a']) is None
 
     create_directory(sourcedir, ['a'])
     assert 'a' in list_dir(sourcedir)
@@ -221,4 +223,3 @@ def test_remove_cache(pcachefs, sourcedir, mountdir, cachedir):
     assert read_from_file(cachedir, ['a', 'cache.data']) is None
     assert read_from_file(mountdir, ['a']) == '1'
     assert read_from_file(cachedir, ['a', 'cache.data']) == '1'
-
