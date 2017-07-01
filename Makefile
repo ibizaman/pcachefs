@@ -15,8 +15,13 @@ venv2.7: .venv2.7/bin/activate  ## Setup virtualenv with python2.7
 
 test: test2.7  ## Run tests for all supported python versions
 
-test2.7: venv2.7  ## Run tests with python2.7
+test2.7: clean venv2.7  ## Run tests with python2.7
 	.venv2.7/bin/python -mpytest test/test_all.py
+
+
+clean:  ## Remove temporary files
+	find . -name '*.pyc' -delete
+	rm -rf build dist *.egg-info test/testroot
 
 
 help: ## This help
