@@ -13,7 +13,12 @@ from pcachefs import main
 
 @pytest.fixture
 def rootdir():
-    dir = tempfile.mkdtemp(dir=os.path.join(os.path.dirname(__file__), 'testroot'))
+    root = os.path.join(os.path.dirname(__file__), 'testroot')
+    try:
+        os.makedirs(root)
+    except OSError:
+        pass
+    dir = tempfile.mkdtemp(dir=root)
     yield dir
     shutil.rmtree(dir)
 

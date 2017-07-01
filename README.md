@@ -1,4 +1,4 @@
-Introduction
+Introduction  [![build status][build-img]][build-url]
 ============
 pCacheFS provides a simple caching layer for other filesystems. This
 makes slow, remote filesystems seem very fast to access. Moreover, the
@@ -86,3 +86,6 @@ $ virtualenv .venv2.7 -p python2.7
 $ source .venv2.7/bin/activate
 $ pip install -e '.[dev,test]'
 ```
+
+[build-img]: https://travis-ci.org/ibizaman/pcachefs.svg?branch=master
+[build-url]: https://travis-ci.org/ibizaman/pcachefs

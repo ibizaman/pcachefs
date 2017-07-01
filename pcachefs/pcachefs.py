@@ -32,7 +32,6 @@ import __builtin__
 from datetime import datetime
 from pprint import pformat
 
-import factory
 import fuse
 from pcachefsutil import E_NO_SUCH_FILE
 from optparse import OptionGroup
