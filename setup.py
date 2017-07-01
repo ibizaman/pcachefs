@@ -65,6 +65,7 @@ setup(name='pCacheFS',
 
     install_requires=['fuse-python'],
     extras_require={
+        'dev': ['ipython'],
         'test': ['mockito', 'pytest']
     },
 
